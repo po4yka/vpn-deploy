@@ -1,0 +1,78 @@
+---
+# Source: xray-core-2026-transport-updates (v26.4.25 #5992 — geodata hot-reload).
+
+- name: Ensure geodata install directory
+  ansible.builtin.file:
+    path: "{{ geodata.install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download geosite.dat
+  ansible.builtin.get_url:
+    url: "{{ geodata.geosite_url }}"
+    dest: "{{ geodata.install_dir }}/geosite.dat"
+    mode: "0644"
+    checksum: "{{ ('sha256:' ~ geodata.geosite_sha256) if geodata.geosite_sha256 | length > 0 else omit }}"
+    force: true
+  notify: Reload xray geodata
+
+- name: Download geoip.dat
+  ansible.builtin.get_url:
+    url: "{{ geodata.geoip_url }}"
+    dest: "{{ geodata.install_dir }}/geoip.dat"
+    mode: "0644"
+    checksum: "{{ ('sha256:' ~ geodata.geoip_sha256) if geodata.geoip_sha256 | length > 0 else omit }}"
+    force: true
+  notify: Reload xray geodata
+
+- name: Drop refresh script
+  ansible.builtin.template:
+    src: vpn-geodata-refresh.sh.j2
+    dest: /usr/local/sbin/vpn-geodata-refresh.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Drop refresh systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/vpn-geodata-refresh.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Refresh Xray geodata
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/vpn-geodata-refresh.sh
+
+- name: Drop refresh systemd timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/vpn-geodata-refresh.timer
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Refresh Xray geodata daily
+
+      [Timer]
+      OnCalendar=*-*-* 04:00:00
+      RandomizedDelaySec=30m
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: Reload systemd
+
+- name: Enable refresh timer
+  ansible.builtin.systemd_service:
+    name: vpn-geodata-refresh.timer
+    enabled: true
+    state: started
+    daemon_reload: true

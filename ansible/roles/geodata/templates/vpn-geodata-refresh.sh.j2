@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Refresh Xray geodata. Downloads to a tmpfile, atomically renames into
+# place, sends SIGHUP to xray (Xray v26.4.x picks up the new files without
+# restart). On Xray < v26.4, SIGHUP is a no-op and a fresh restart is
+# needed — but rolling a restart on a daily refresh would be too noisy, so
+# operators on older Xray should disable this timer.
+set -euo pipefail
+
+INSTALL_DIR={{ geodata.install_dir | quote }}
+
+download() {
+  local url="$1" dest="$2" sha="$3"
+  local tmp="${dest}.new"
+  curl -fsSL --max-time 120 -o "$tmp" "$url"
+  if [[ -n "$sha" ]]; then
+    echo "${sha}  ${tmp}" | sha256sum -c -
+  fi
+  mv -f "$tmp" "$dest"
+}
+
+download "{{ geodata.geosite_url }}" "${INSTALL_DIR}/geosite.dat" "{{ geodata.geosite_sha256 }}"
+download "{{ geodata.geoip_url }}"   "${INSTALL_DIR}/geoip.dat"   "{{ geodata.geoip_sha256 }}"
+
+# SIGHUP triggers Xray's geodata hot-reload (v26.4.x+).
+if systemctl is-active --quiet xray; then
+  systemctl kill --signal=HUP xray.service
+fi

@@ -1,0 +1,23 @@
+[Unit]
+Description=Caddy + forwardproxy@naive (NaiveProxy server)
+Documentation=https://github.com/klzgrad/forwardproxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=naive
+Group=naive
+ExecStart=/usr/local/bin/caddy-naive run --config {{ naive.config_dir }}/Caddyfile --adapter caddyfile
+ExecReload=/usr/local/bin/caddy-naive reload --config {{ naive.config_dir }}/Caddyfile --adapter caddyfile
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=1048576
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths={{ naive.log_dir }} /var/lib/naive {{ naive.config_dir }}
+
+[Install]
+WantedBy=multi-user.target

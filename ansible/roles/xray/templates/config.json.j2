@@ -4,6 +4,15 @@
     "access": "{{ xray_log_path }}/access.log",
     "error": "{{ xray_log_path }}/error.log"
   },
+  "dns": {
+    "servers": [
+      "1.1.1.1",
+      "8.8.8.8",
+      "https+local://dns.cloudflare.com/dns-query"
+    ],
+    "queryStrategy": "UseIP",
+    "tag": "dns-inbound"
+  },
   "inbounds": [
     {
       "tag": "vless-reality",
@@ -40,7 +49,9 @@
       },
       "sniffing": {
         "enabled": true,
-        "destOverride": ["http", "tls", "quic"]
+        "destOverride": ["http", "tls", "quic"],
+        "metadataOnly": false,
+        "routeOnly": false
       }
     }{% if vpn.enable_nginx_xhttp | default(false) %},
     {
@@ -64,29 +75,98 @@
         "security": "none",
         "xhttpSettings": {
           "path": "{{ xray.xhttp_path | default('/app-sync') }}",
-          "mode": "auto"
+          "mode": "{{ xray.xhttp_mode | default('auto') }}"
         }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls"],
+        "metadataOnly": false
       }
     }{% endif %}
   ],
   "outbounds": [
     {
       "tag": "direct",
-      "protocol": "freedom"
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIP"
+      }
+    },
+    {
+      "tag": "direct-asis",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "AsIs"
+      }
     },
     {
       "tag": "block",
-      "protocol": "blackhole"
+      "protocol": "blackhole",
+      "settings": {
+        "response": {
+          "type": "none"
+        }
+      }
+    },
+    {
+      "tag": "dns-out",
+      "protocol": "dns"
     }
   ],
   "routing": {
-    "domainStrategy": "AsIs",
+    "domainStrategy": "IPIfNonMatch",
     "rules": [
       {
         "type": "field",
-        "ip": ["geoip:private"],
+        "comment": "DNS hijack — keep client DNS lookups visible to xray and resolvable",
+        "inboundTag": ["vless-reality"{% if vpn.enable_nginx_xhttp | default(false) %},"vless-xhttp-localhost"{% endif %}],
+        "port": "53",
+        "outboundTag": "dns-out"
+      },
+      {
+        "type": "field",
+        "comment": "Probe-defense: block BitTorrent on the exit (graylist correlates BT)",
+        "protocol": ["bittorrent"],
         "outboundTag": "block"
+      },
+      {
+        "type": "field",
+        "comment": "Probe-defense: refuse QUIC outbound to prevent UDP leak fingerprint",
+        "network": "udp",
+        "port": "443",
+        "outboundTag": "block"
+      },
+      {
+        "type": "field",
+        "comment": "RFC1918 / link-local / loopback should never egress",
+        "ip": [
+          "geoip:private",
+          "127.0.0.0/8",
+          "169.254.0.0/16"
+        ],
+        "outboundTag": "block"
+      },
+      {
+        "type": "field",
+        "comment": "Default — direct freedom outbound with UseIP strategy",
+        "outboundTag": "direct"
       }
     ]
+  },
+  "policy": {
+    "levels": {
+      "0": {
+        "handshake": 4,
+        "connIdle": 300,
+        "uplinkOnly": 2,
+        "downlinkOnly": 5,
+        "bufferSize": 4
+      }
+    },
+    "system": {
+      "statsInboundUplink": false,
+      "statsInboundDownlink": false
+    }
   }
 }

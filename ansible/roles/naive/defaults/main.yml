@@ -1,0 +1,22 @@
+---
+# NaiveProxy as an alternative P1 transport. Mutually exclusive with
+# nginx-xhttp on the same host (both want 443/tcp). Off by default.
+#
+# Source: naiveproxy-protocol-overview + naiveproxy-russia-field-status-april-2026.
+
+naive:
+  # Build the Caddy + forwardproxy@naive binary on first install. Subsequent
+  # runs use the pinned binary at /usr/local/bin/caddy-naive.
+  build_with_xcaddy: true
+  # Pin xcaddy version for reproducibility.
+  xcaddy_version: "v0.4.2"
+  # Caddy version that xcaddy will pin during build. The role passes this as
+  # the `--caddy=` flag.
+  caddy_version: "v2.8.4"
+  # Forwardproxy fork (klzgrad's naive-enhanced fork).
+  forwardproxy_module: "github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@naive"
+  install_dir: /opt/naive
+  config_dir: /etc/naive
+  log_dir: /var/log/naive
+  bind_port: 443        # must be 443 to look like a real HTTPS site
+  decoy_root: /var/www/naive-decoy

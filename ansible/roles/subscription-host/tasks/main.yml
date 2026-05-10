@@ -1,15 +1,13 @@
 ---
-# Source: subscription-delivery-plane-2026 (§1 target architecture).
+# Source: subscription-delivery-plane-2026 §11 (revocation), §9 (rate limit).
 #
-# v1 scope: a separate nginx server block on a non-default port that serves
-# pre-rendered subscription payloads from /var/lib/vpn-sub/<token>. Token
-# generation, payload rendering, and revocation are operator's responsibility
-# (scripts/new-client.sh emits payload files; this role only hosts them).
-#
-# Out of scope for v1: full no-log delivery API, rate-limit middleware,
-# QR bootstrap. See docs/RUNBOOK-add-fallback.md for v2 scope.
+# v1.2 scope: separate nginx server block, payload files at
+# /var/lib/vpn-sub/<token>, plus
+#   * revocation list — revoked tokens get HTTP 410 Gone instead of the file
+#   * per-IP rate limiting (nginx limit_req)
+#   * no access logs on the subscription host (privacy)
 
-- name: Ensure nginx is present (subscription host shares it with nginx-xhttp)
+- name: Ensure nginx is present
   ansible.builtin.apt:
     name:
       - nginx
@@ -22,6 +20,30 @@
     owner: root
     group: www-data
     mode: "0750"
+
+- name: Drop revoked-token map (read by nginx)
+  ansible.builtin.template:
+    src: revoked-tokens.map.j2
+    dest: /etc/nginx/conf.d/vpn-sub-revoked.map
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "nginx -t -c /etc/nginx/nginx.conf"
+  no_log: true
+  diff: false
+  notify: Reload nginx
+
+- name: Drop rate-limit zone (http-level)
+  ansible.builtin.copy:
+    dest: /etc/nginx/conf.d/vpn-sub-ratelimit.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Per-IP rate limit zone for the subscription host.
+      # zone size 10m holds ~160k state entries; rate {{ subscription.rate_limit | default('5r/m') }}.
+      limit_req_zone $binary_remote_addr zone=vpn_sub_per_ip:10m rate={{ subscription.rate_limit | default('5r/m') }};
+  notify: Reload nginx
 
 - name: Drop subscription site
   ansible.builtin.template:

@@ -5,8 +5,10 @@
 vpn:
   enable_xray_reality: false
   enable_nginx_xhttp: true
+  enable_naive: false
   enable_hysteria: true
   enable_amneziawg: true
+  enable_geodata: false   # no xray here; nothing to feed geodata to
   enable_monitoring: true
   enable_watchdog: true
   enable_backup: true

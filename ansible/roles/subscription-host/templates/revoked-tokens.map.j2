@@ -1,0 +1,10 @@
+# Managed by Ansible role `subscription-host`. Maps revoked subscription
+# tokens to "1" so nginx can short-circuit them to 410 Gone. Anything not
+# listed defaults to "0".
+
+map $vpn_sub_token $vpn_sub_revoked {
+  default 0;
+{% for token in subscription.revoked_tokens | default([]) %}
+  "{{ token }}" 1;
+{% endfor %}
+}

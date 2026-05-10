@@ -52,6 +52,17 @@ Use when the host itself is the problem: IP burned, kernel panic loop,
 hypervisor outage, or you suspect compromise.
 
 ```bash
+# Orchestrated form (recommended):
+PROVIDER=upcloud BLUE_ENV=prod GREEN_ENV=green-2026-05 \
+  ANSIBLE_SSH_PRIVATE_KEY_FILE=~/.ssh/vpn_deploy \
+  make blue-green GREEN_ENV=green-2026-05
+#
+# scripts/blue-green.sh walks 8 phases (verify blue → bootstrap green
+# tfvars → provision → multi-host inventory → deploy + verify + smoke-test
+# → operator pivot → drain → optional retire). It pauses at the operator
+# pivot step so you flip DNS / floating IP yourself.
+#
+# Manual form (for finer control):
 # 1. Bring up a green node alongside blue. Use a different server_name in tfvars
 #    (e.g., vpn-prod-fi2 instead of vpn-prod-fi1) so they coexist. You'll have
 #    to drop or temporarily relax `prevent_destroy` on blue if you want

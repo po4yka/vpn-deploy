@@ -27,9 +27,17 @@
       when: vpn.enable_xray_reality | default(true)
       tags: [xray, p0, transport]
 
+    - role: geodata
+      when: (vpn.enable_xray_reality | default(true)) and (vpn.enable_geodata | default(true))
+      tags: [geodata, xray]
+
     - role: nginx-xhttp
       when: vpn.enable_nginx_xhttp | default(true)
       tags: [nginx, xhttp, p1, transport]
+
+    - role: naive
+      when: vpn.enable_naive | default(false)
+      tags: [naive, p1, transport]
 
     - role: hysteria
       when: vpn.enable_hysteria | default(false)
