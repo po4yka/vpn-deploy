@@ -60,6 +60,14 @@
     group: root
     mode: "0755"
 
+- name: Ensure sshd runtime directory exists
+  ansible.builtin.file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Drop SSH hardening config
   ansible.builtin.template:
     src: sshd_config.d-hardening.conf.j2

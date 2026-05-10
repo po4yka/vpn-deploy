@@ -42,6 +42,13 @@
         mode: "0755"
         content: |
           #!/bin/sh
+          if [ "$1" = "server" ]; then
+            trap 'exit 0' TERM INT
+            while true; do
+              sleep 3600 &
+              wait $!
+            done
+          fi
           exit 0
     - name: Stub /usr/local/bin/hysteria
       ansible.builtin.copy:
@@ -51,6 +58,13 @@
         mode: "0755"
         content: |
           #!/bin/sh
+          if [ "$1" = "server" ]; then
+            trap 'exit 0' TERM INT
+            while true; do
+              sleep 3600 &
+              wait $!
+            done
+          fi
           exit 0
     - name: Pre-create system user (the role itself does this; molecule pre_tasks short-circuit get_url)
       ansible.builtin.user:
