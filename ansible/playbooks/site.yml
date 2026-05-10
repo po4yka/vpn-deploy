@@ -4,8 +4,15 @@
   become: true
   gather_facts: true
 
+  vars:
+    vpn_secrets_file: >-
+      {{
+        lookup('env', 'VPN_SECRETS_FILE')
+        | default(playbook_dir ~ '/../../secrets/prod.secrets.example.yaml', true)
+      }}
+
   vars_files:
-    - "{{ lookup('env', 'VPN_SECRETS_FILE') }}"
+    - "{{ vpn_secrets_file }}"
 
   pre_tasks:
     - name: Ensure VPN_SECRETS_FILE was provided

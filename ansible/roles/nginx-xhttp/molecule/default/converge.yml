@@ -3,7 +3,8 @@
   hosts: all
   become: true
   vars:
-    nginx_xhttp_port: 8443
+    nginx_xhttp_public_port: 8443
+    nginx_xhttp_port: 10085
     xray:
       xhttp_path: "/app-sync"
     nginx_xhttp:

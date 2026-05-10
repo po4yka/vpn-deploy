@@ -1,6 +1,7 @@
 ---
 # Cohort: P1+P2 nodes (no REALITY direct path). Used by hosts in the
-# [vpn-p1p2] inventory group.
+# [vpn-p1p2] inventory group. These hosts can override
+# nginx_xhttp_public_port to 443 because xray REALITY is disabled.
 
 vpn:
   enable_xray_reality: false

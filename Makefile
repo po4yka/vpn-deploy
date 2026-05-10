@@ -52,9 +52,10 @@ help:
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
-	@for tool in terraform ansible ansible-playbook ansible-lint sops age gitleaks jq ssh; do \
+	@for tool in terraform ansible ansible-playbook ansible-lint sops age gitleaks jq ssh python3; do \
 	  command -v $$tool >/dev/null 2>&1 || { echo "missing: $$tool"; exit 1; }; \
 	done
+	@python3 -c 'import yaml' >/dev/null 2>&1 || { echo "missing: Python module PyYAML"; exit 1; }
 	@echo "all prereqs present"
 
 init:

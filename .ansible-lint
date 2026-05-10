@@ -14,17 +14,24 @@
 #                             the role's runtime variable namespace.
 # - ignore-errors             used intentionally in handler `rescue:` blocks
 #                             where the rescue is best-effort cleanup.
+# - role-name                 nginx-xhttp and subscription-host are existing
+#                             public role names referenced by CI, docs, and
+#                             operator commands; renaming them is out of scope
+#                             for lint config repair.
 
 profile: production
+supported_ansible_also:
+  - "2.20."
 
 skip_list:
   - name[casing]
   - command-instead-of-module
   - var-naming[no-role-prefix]
   - ignore-errors
-  - yaml[colons]                 # mirrors .yamllint.yml — alignment is intentional
+  - role-name
 
 exclude_paths:
   - .git/
+  - .ansible/
   - .venv/
   - ansible/inventory/generated.ini

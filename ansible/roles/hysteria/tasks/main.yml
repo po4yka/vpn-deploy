@@ -20,9 +20,16 @@
     group: "{{ item.group | default('root') }}"
     mode: "{{ item.mode }}"
   loop:
-    - { path: "{{ hysteria_config_dir }}", mode: "0750", owner: "root", group: "hysteria" }
-    - { path: "{{ hysteria_install_root }}/releases", mode: "0755" }
-    - { path: "{{ hysteria_log_dir }}", mode: "0750", owner: "hysteria", group: "hysteria" }
+    - path: "{{ hysteria_config_dir }}"
+      mode: "0750"
+      owner: root
+      group: hysteria
+    - path: "{{ hysteria_install_root }}/releases"
+      mode: "0755"
+    - path: "{{ hysteria_log_dir }}"
+      mode: "0750"
+      owner: hysteria
+      group: hysteria
 
 - name: Set architecture-specific Hysteria archive facts
   ansible.builtin.set_fact:
@@ -84,8 +91,10 @@
     group: hysteria
     mode: "0640"
   loop:
-    - { content: "{{ hysteria.cert_pem }}", dest: "{{ hysteria_config_dir }}/server.fullchain.pem" }
-    - { content: "{{ hysteria.key_pem }}",  dest: "{{ hysteria_config_dir }}/server.key" }
+    - content: "{{ hysteria.cert_pem }}"
+      dest: "{{ hysteria_config_dir }}/server.fullchain.pem"
+    - content: "{{ hysteria.key_pem }}"
+      dest: "{{ hysteria_config_dir }}/server.key"
   no_log: true
   diff: false
 

@@ -23,5 +23,5 @@ PostDown = nft delete rule inet nat postrouting iifname "%i" oifname != "%i" mas
 # {{ peer.name }}
 PublicKey  = {{ peer.public_key }}
 PresharedKey = {{ peer.preshared_key }}
-AllowedIPs = {{ peer.allowed_ips | default("10.66.66." ~ loop.index + 1 ~ "/32") }}
+AllowedIPs = {{ peer.allowed_ips | default("10.66.66." ~ (loop.index + 1) ~ "/32") }}
 {% endfor %}

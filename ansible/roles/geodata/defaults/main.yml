@@ -1,17 +1,16 @@
 ---
-# Pinned geodata for Xray. Override by setting `geodata.*` keys in secrets
-# (or in group_vars). Defaults track v2fly community packs.
+# Pinned geodata for Xray. Operators must supply concrete release URLs and
+# SHA256 checksums; the role refuses moving `latest` URLs and empty checksums.
 #
-# RU-aware alternatives operators may prefer:
-#   geosite_url: https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat
-#   geoip_url:   https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat
+# Example source families operators may pin to specific releases:
+#   - https://github.com/v2fly/domain-list-community/releases
+#   - https://github.com/v2fly/geoip/releases
+#   - https://github.com/runetfreedom/russia-v2ray-rules-dat/releases
 
 geodata:
-  geosite_url: "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat"
-  geoip_url:   "https://github.com/v2fly/geoip/releases/latest/download/geoip.dat"
-  # Pin SHA256 for reproducibility. Leave empty to skip checksum verification
-  # (NOT recommended for production).
+  geosite_url: ""
+  geoip_url: ""
   geosite_sha256: ""
-  geoip_sha256:   ""
+  geoip_sha256: ""
   install_dir: /usr/local/share/xray
   refresh_interval: "1d"

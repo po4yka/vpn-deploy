@@ -6,7 +6,7 @@
 #   scripts/new-client.sh <name>              # add new client to all profiles
 #   scripts/new-client.sh --emit-uri <name>   # also print vless:// + hysteria2:// URIs
 #
-# Requires: sops, age, jq, xray (for x25519), uuidgen, openssl.
+# Requires: sops, age, jq, python3, uuidgen, openssl, and awg or wg.
 set -euo pipefail
 
 EMIT_URI=0
@@ -35,6 +35,39 @@ HY_PASSWORD="$(openssl rand -base64 24)"
 AWG_PRIV="$(awg genkey 2>/dev/null || wg genkey)"
 AWG_PUB="$(echo "$AWG_PRIV" | awg pubkey 2>/dev/null || echo "$AWG_PRIV" | wg pubkey)"
 AWG_PSK="$(awg genpsk 2>/dev/null || wg genpsk)"
+AWG_ALLOWED_IPS="$(
+  { sops --decrypt --extract '["amneziawg_secrets"]["peers"]' --output-type json "$SOPS_FILE" 2>/dev/null || printf '[]'; } \
+    | python3 -c '
+import json
+import re
+import sys
+
+try:
+    peers = json.load(sys.stdin)
+except json.JSONDecodeError:
+    peers = []
+if not isinstance(peers, list):
+    peers = []
+
+used = {1}
+for index, peer in enumerate(peers, start=1):
+    if not isinstance(peer, dict):
+        continue
+    allowed = str(peer.get("allowed_ips") or "").strip()
+    match = re.search(r"(?:^|,\s*)10\.66\.66\.(\d+)/32(?:\s*,|$)", allowed)
+    if match:
+        used.add(int(match.group(1)))
+    else:
+        used.add(index + 1)
+
+for octet in range(2, 255):
+    if octet not in used:
+        print(f"10.66.66.{octet}/32")
+        break
+else:
+    raise SystemExit("no available AmneziaWG peer address in 10.66.66.0/24")
+'
+)"
 
 # Edit secrets in place. SOPS preserves encryption boundaries when called via
 # `sops set` (yaml mode).
@@ -45,7 +78,7 @@ sops set "$SOPS_FILE" \
 
 sops --set "[\"hysteria\"][\"clients\"] += [{\"name\":\"${NAME}\",\"password\":\"${HY_PASSWORD}\"}]" "$SOPS_FILE"
 
-sops --set "[\"amneziawg_secrets\"][\"peers\"] += [{\"name\":\"${NAME}\",\"public_key\":\"${AWG_PUB}\",\"preshared_key\":\"${AWG_PSK}\"}]" "$SOPS_FILE"
+sops --set "[\"amneziawg_secrets\"][\"peers\"] += [{\"name\":\"${NAME}\",\"public_key\":\"${AWG_PUB}\",\"preshared_key\":\"${AWG_PSK}\",\"allowed_ips\":\"${AWG_ALLOWED_IPS}\"}]" "$SOPS_FILE"
 
 cat <<EOF
 created client: ${NAME}
@@ -53,6 +86,7 @@ created client: ${NAME}
   xray shortId:     ${SHORT_ID}
   hysteria pass:    (stored)
   AWG public key:   ${AWG_PUB}
+  AWG allowed IPs:  ${AWG_ALLOWED_IPS}
 
 The client also needs the AWG private key to configure the device:
   AWG private:      ${AWG_PRIV}

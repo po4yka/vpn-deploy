@@ -59,9 +59,11 @@ writes plaintext to a path you can `cat` later.
 See `secrets/prod.secrets.example.yaml` for the full schema. High-level:
 
 ```
-xray.{version, sha256, reality_*, target, server_names, xhttp_path, clients[*]}
+xray.{version, linux_*_sha256, reality_*, target, server_names, xhttp_path, clients[*]}
 nginx_xhttp.{server_name, cert_pem, key_pem}
-hysteria.{version, sha256, cert_pem, key_pem, bandwidth_*, salamander_*, clients[*]}
+hysteria.{version, linux_*_sha256, cert_pem, key_pem, bandwidth_*, salamander_*, clients[*]}
+geodata.{geosite_url, geoip_url, geosite_sha256, geoip_sha256, install_dir, refresh_interval}
+amneziawg_go_version / amneziawg_tools_version
 amneziawg_secrets.{server_private_key, jc/jmin/jmax/s1/s2/h1-h4, peers[*]}
 backup.restic_password
 subscription.{port, server_name}     # optional

@@ -1,6 +1,5 @@
 # Terraform
 .terraform/
-.terraform.lock.hcl
 *.tfstate
 *.tfstate.*
 *.tfplan
@@ -10,7 +9,6 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 terraform/providers/*/.terraform/
-terraform/providers/*/.terraform.lock.hcl
 terraform/providers/*/*.tfstate
 terraform/providers/*/*.tfstate.*
 terraform/providers/*/*.tfplan

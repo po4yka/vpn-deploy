@@ -1,6 +1,9 @@
 ---
 # AmneziaWG runtime defaults. Override in group_vars or playbook vars if needed.
 
+amneziawg_go_version: ""
+amneziawg_tools_version: ""
+
 amneziawg:
   listen_port: 51820
   interface: awg0

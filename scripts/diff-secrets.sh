@@ -14,7 +14,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TF_DIR="${REPO_ROOT}/terraform/providers/${PROVIDER}"
 SECRETS_FILE="${SECRETS_FILE:-/tmp/vpn-${ENV}.secrets.yaml}"
 
-for tool in terraform ssh ansible diff jq; do
+for tool in terraform ssh ansible ansible-playbook diff jq python3; do
   command -v "$tool" >/dev/null 2>&1 || { echo "missing: $tool" >&2; exit 1; }
 done
 
@@ -42,10 +42,95 @@ ssh_cmd() {
       "${USER}@${IP}" "$@"
 }
 
+resolve_host_vars() {
+  local host="$1"
+  local inventory="${REPO_ROOT}/ansible/inventory/generated.ini"
+
+  if command -v ansible-inventory >/dev/null 2>&1 && [[ -f "$inventory" ]]; then
+    local host_vars
+    if host_vars="$(
+      ANSIBLE_CONFIG="${REPO_ROOT}/ansible/ansible.cfg" \
+        ansible-inventory \
+          -i "$inventory" \
+          --playbook-dir "${REPO_ROOT}/ansible" \
+          --host "$host" 2>/dev/null
+    )"; then
+      if jq -e 'has("vpn")' >/dev/null 2>&1 <<< "$host_vars"; then
+        printf '%s\n' "$host_vars"
+        return
+      fi
+    fi
+  fi
+
+  python3 - "$REPO_ROOT" "$host" <<'PY'
+import json
+import pathlib
+import sys
+
+import yaml
+
+root = pathlib.Path(sys.argv[1])
+host = sys.argv[2]
+group_vars = root / "ansible" / "group_vars"
+inventory = root / "ansible" / "inventory" / "generated.ini"
+
+
+def deep_merge(base, override):
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def load_group(name):
+    path = group_vars / f"{name}.yml"
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as handle:
+        return yaml.safe_load(handle) or {}
+
+
+host_groups = []
+if inventory.exists():
+    section = None
+    for raw_line in inventory.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1]
+            continue
+        if section and ":" not in section and line.split()[0] == host:
+            host_groups.append(section)
+
+merged = load_group("all")
+for group in host_groups or ["vpn"]:
+    if group != "all":
+        deep_merge(merged, load_group(group))
+
+print(json.dumps(merged))
+PY
+}
+
+config_toggle() {
+  local key="$1"
+  local default="$2"
+  jq -r --arg key "$key" --argjson default "$default" \
+    'if has($key) then .[$key] else $default end | tostring | ascii_downcase' \
+    <<< "$CONFIG_VPN_JSON"
+}
+
+HOST_VARS_JSON="$(resolve_host_vars "$HOSTNAME")"
+CONFIG_VPN_JSON="$(jq -c '.vpn // {}' <<< "$HOST_VARS_JSON")"
+AWG_INTERFACE="$(jq -r '.amneziawg.interface // "awg0"' <<< "$HOST_VARS_JSON")"
+
 drift=0
 
 # 1. Xray config: render locally via ansible-playbook --check, fetch remote
 echo "== Xray config =="
+if [[ "$(config_toggle enable_xray_reality true)" == "true" ]]; then
 ansible -i "${REPO_ROOT}/ansible/inventory/generated.ini" "$HOSTNAME" \
   -m fetch -a "src=/etc/xray/config.json dest=${WORK}/remote/ flat=yes" \
   --extra-vars "@${SECRETS_FILE}" >/dev/null 2>&1 \
@@ -94,22 +179,30 @@ else
   echo "Could not extract Xray shape from $REMOTE_FILE"
   drift=1
 fi
+else
+  echo "skipped: vpn.enable_xray_reality is false for this host"
+fi
 
-# 2. Service status comparison — what's enabled vs what secrets say
+# 2. Service status comparison — what's enabled vs resolved Ansible config
 echo
-echo "== Service vs secrets-toggle drift =="
-for svc_key_pair in "xray:enable_xray_reality" "nginx:enable_nginx_xhttp" "hysteria-server:enable_hysteria"; do
-  svc="${svc_key_pair%:*}"
-  key="${svc_key_pair#*:}"
-  want_enabled="$(yq -r ".vpn.${key} // false" "${SECRETS_FILE}" 2>/dev/null \
-    || python3 -c "import yaml,sys; print(yaml.safe_load(open('${SECRETS_FILE}')).get('vpn',{}).get('${key}', False))" 2>/dev/null \
-    || echo unknown)"
+echo "== Service vs Ansible-toggle drift =="
+echo "Resolved vpn toggles: ${CONFIG_VPN_JSON}"
+for svc_key_pair in \
+  "xray:enable_xray_reality:true" \
+  "nginx:enable_nginx_xhttp:true" \
+  "hysteria-server:enable_hysteria:false" \
+  "awg-quick@${AWG_INTERFACE}:enable_amneziawg:false"; do
+  default="${svc_key_pair##*:}"
+  svc_and_key="${svc_key_pair%:*}"
+  svc="${svc_and_key%:*}"
+  key="${svc_and_key#*:}"
+  want_enabled="$(config_toggle "$key" "$default")"
   is_active="$(ssh_cmd "systemctl is-active ${svc} 2>/dev/null || true" | tr -d '\r' || echo missing)"
   printf "  %-20s want_enabled=%-8s actually=%s\n" "$svc" "$want_enabled" "$is_active"
-  if [[ "$want_enabled" == "True" || "$want_enabled" == "true" ]] && [[ "$is_active" != "active" ]]; then
+  if [[ "$want_enabled" == "true" ]] && [[ "$is_active" != "active" ]]; then
     drift=1
   fi
-  if [[ "$want_enabled" == "False" || "$want_enabled" == "false" ]] && [[ "$is_active" == "active" ]]; then
+  if [[ "$want_enabled" == "false" ]] && [[ "$is_active" == "active" ]]; then
     drift=1
   fi
 done
@@ -123,14 +216,48 @@ echo "  /etc/nftables.conf mtime: $remote_mtime_human"
 # 4. Pinned version check — Xray and Hysteria binary versions vs secrets
 echo
 echo "== Binary version pinning =="
-remote_xray_ver="$(ssh_cmd '/usr/local/bin/xray version 2>&1 | head -1' || true)"
-expected_xray_ver="$(grep -E '^[[:space:]]*version:' "${SECRETS_FILE}" 2>/dev/null | head -1 | awk -F'"' '{print $2}')"
-echo "  Xray remote: $remote_xray_ver"
-echo "  Xray secrets pin: $expected_xray_ver"
+if [[ "$(config_toggle enable_xray_reality true)" == "true" ]]; then
+  remote_xray_ver="$(ssh_cmd '/usr/local/bin/xray version 2>&1 | head -1' || true)"
+  expected_xray_ver="$(python3 - "$SECRETS_FILE" <<'PY'
+import sys
+import yaml
 
-if [[ -n "$expected_xray_ver" && "$remote_xray_ver" != *"$expected_xray_ver"* ]]; then
-  echo "  DRIFT: Xray version mismatch"
-  drift=1
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = yaml.safe_load(handle) or {}
+print((data.get("xray") or {}).get("version", ""))
+PY
+)"
+  echo "  Xray remote: $remote_xray_ver"
+  echo "  Xray secrets pin: $expected_xray_ver"
+
+  if [[ -n "$expected_xray_ver" && "$remote_xray_ver" != *"$expected_xray_ver"* ]]; then
+    echo "  DRIFT: Xray version mismatch"
+    drift=1
+  fi
+else
+  echo "  Xray skipped: vpn.enable_xray_reality is false for this host"
+fi
+
+if [[ "$(config_toggle enable_hysteria false)" == "true" ]]; then
+  remote_hysteria_ver="$(ssh_cmd '/usr/local/bin/hysteria version 2>&1 | head -1' || true)"
+  expected_hysteria_ver="$(python3 - "$SECRETS_FILE" <<'PY'
+import sys
+import yaml
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = yaml.safe_load(handle) or {}
+print((data.get("hysteria") or {}).get("version", ""))
+PY
+)"
+  echo "  Hysteria remote: $remote_hysteria_ver"
+  echo "  Hysteria secrets pin: $expected_hysteria_ver"
+
+  if [[ -n "$expected_hysteria_ver" && "$remote_hysteria_ver" != *"$expected_hysteria_ver"* ]]; then
+    echo "  DRIFT: Hysteria version mismatch"
+    drift=1
+  fi
+else
+  echo "  Hysteria skipped: vpn.enable_hysteria is false for this host"
 fi
 
 echo

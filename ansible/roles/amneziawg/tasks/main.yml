@@ -5,6 +5,18 @@
 # Userspace path is preferred for portability across kernels. The kernel module
 # variant ships separately and is not assumed here.
 
+- name: Pre-flight - AmneziaWG source refs are pinned
+  ansible.builtin.assert:
+    that:
+      - amneziawg_go_version | length > 0
+      - amneziawg_tools_version | length > 0
+      - (amneziawg_go_version | lower) not in ['main', 'master', 'head']
+      - (amneziawg_tools_version | lower) not in ['main', 'master', 'head']
+    fail_msg: |
+      Set amneziawg_go_version and amneziawg_tools_version to pinned upstream
+      tags or commit SHAs. The role does not clone moving branches such as
+      main, master, or HEAD.
+
 - name: Install build dependencies for AmneziaWG userspace
   ansible.builtin.apt:
     name:
@@ -23,8 +35,7 @@
   ansible.builtin.git:
     repo: https://github.com/amnezia-vpn/amneziawg-go
     dest: /opt/src/amneziawg-go
-    version: "{{ amneziawg.version | default('main') }}"
-    depth: 1
+    version: "{{ amneziawg_go_version }}"
     update: false
 
 - name: Build amneziawg-go
@@ -46,8 +57,7 @@
   ansible.builtin.git:
     repo: https://github.com/amnezia-vpn/amneziawg-tools
     dest: /opt/src/amneziawg-tools
-    version: "{{ amneziawg.tools_version | default('main') }}"
-    depth: 1
+    version: "{{ amneziawg_tools_version }}"
     update: false
 
 - name: Build amneziawg-tools

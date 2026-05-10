@@ -3,6 +3,10 @@
 Each provider lives in its own root module under `providers/<name>/`. They
 share `shared/cloud-init.yaml.tftpl` for the bootstrap template.
 
+Use Terraform >= 1.15. Each provider root commits its own
+`.terraform.lock.hcl` so CI and operator workstations resolve the same provider
+builds.
+
 ## Why per-provider root modules
 
 Terraform requires every `module "x" { source = "…" }` to use a static

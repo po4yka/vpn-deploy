@@ -6,7 +6,7 @@ vpn:
   # Toggle individual transport profiles. P0 (xray-reality) is always on.
   enable_xray_reality: true
   enable_nginx_xhttp: true        # P1 — direct, no CDN baseline
-  enable_naive: false             # P1 alternative — mutually exclusive with nginx-xhttp on 443
+  enable_naive: false             # P1 alternative; do not share a public port with nginx-xhttp
   enable_hysteria: true           # P2 — UDP/443
   enable_amneziawg: true          # P2 — device-VPN
   enable_geodata: true            # geosite/geoip pinned + daily refresh
@@ -20,7 +20,8 @@ allowed_ssh_cidrs: []  # populated from terraform tfvars; see render-inventory.s
 
 # Ports
 xray_port: 443
-nginx_xhttp_port: 8443        # localhost-only; nginx fronts 443/tcp
+nginx_xhttp_public_port: 8443 # public nginx listener; direct-only cohorts may override to 443
+nginx_xhttp_port: 10085       # localhost-only Xray XHTTP inbound behind nginx
 hysteria_port: 443
 
 # Paths
