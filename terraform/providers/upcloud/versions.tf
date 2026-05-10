@@ -1,10 +1,10 @@
 terraform {
-  required_version = ">= 1.13"
+  required_version = ">= 1.15"
 
   required_providers {
     upcloud = {
       source  = "UpCloudLtd/upcloud"
-      version = "~> 5.0"
+      version = "~> 5.36"
     }
   }
 }

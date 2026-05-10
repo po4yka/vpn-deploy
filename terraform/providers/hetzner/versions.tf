@@ -11,12 +11,12 @@
 #     scripts/render-inventory.sh works without changes.
 
 terraform {
-  required_version = ">= 1.13"
+  required_version = ">= 1.15"
 
   required_providers {
     hcloud = {
       source  = "hetznercloud/hcloud"
-      version = "~> 1.50"
+      version = "~> 1.62"
     }
   }
 }

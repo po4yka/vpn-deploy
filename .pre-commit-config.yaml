@@ -1,12 +1,12 @@
 ---
 repos:
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.21.0
+    rev: v8.30.1
     hooks:
       - id: gitleaks
 
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.96.1
+    rev: v1.105.0
     hooks:
       - id: terraform_fmt
       - id: terraform_validate
@@ -14,19 +14,19 @@ repos:
           - --tf-init-args=-backend=false
 
   - repo: https://github.com/ansible/ansible-lint
-    rev: v25.1.0
+    rev: v26.4.0
     hooks:
       - id: ansible-lint
         files: \.(yaml|yml)$
 
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
+    rev: v1.38.0
     hooks:
       - id: yamllint
         args: ['-c', '.yamllint.yml']
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -37,7 +37,7 @@ repos:
         args: ['--maxkb=500']
 
   - repo: https://github.com/koalaman/shellcheck-precommit
-    rev: v0.10.0
+    rev: v0.11.0
     hooks:
       - id: shellcheck
         args: ['-s', 'bash', '-S', 'warning']
