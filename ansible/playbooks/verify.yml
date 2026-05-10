@@ -4,10 +4,25 @@
   become: true
   gather_facts: false
 
+  vars:
+    vpn_secrets_file: >-
+      {{
+        lookup('env', 'VPN_SECRETS_FILE')
+        | default(playbook_dir ~ '/../../secrets/prod.secrets.example.yaml', true)
+      }}
+
   vars_files:
-    - "{{ lookup('env', 'VPN_SECRETS_FILE') }}"
+    - "{{ vpn_secrets_file }}"
 
   tasks:
+    - name: Ensure VPN_SECRETS_FILE was provided
+      ansible.builtin.assert:
+        that:
+          - lookup('env', 'VPN_SECRETS_FILE') | length > 0
+        fail_msg: |
+          VPN_SECRETS_FILE is not set. Run `make decrypt` or export the path
+          to your decrypted secrets file before running this playbook.
+
     - name: Cloud-init bootstrap marker exists
       ansible.builtin.stat:
         path: /var/lib/cloud-init-vpn-bootstrap.done
@@ -33,13 +48,23 @@
       failed_when: xray_status.stdout != "active"
       when: vpn.enable_xray_reality | default(true)
 
-    - name: TCP/443 listening
+    - name: Xray TCP listener active
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          ss -lnt | awk '{print $4}' | grep -q ':443$'
+          ss -lnt | awk '{print $4}' | grep -q ':{{ xray_port | default(443) }}$'
         executable: /bin/bash
       changed_when: false
+      when: vpn.enable_xray_reality | default(true)
+
+    - name: nginx-xhttp public TCP listener active
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ss -lnt | awk '{print $4}' | grep -q ':{{ nginx_xhttp_public_port | default(8443) }}$'
+        executable: /bin/bash
+      changed_when: false
+      when: vpn.enable_nginx_xhttp | default(true)
 
     - name: nginx -t
       ansible.builtin.command:

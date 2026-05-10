@@ -19,6 +19,10 @@ if [[ -z "$NEW_ENV" ]]; then
   echo "usage: $0 <new_env> [new_zone]" >&2
   exit 1
 fi
+if [[ ! "$NEW_ENV" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]]; then
+  echo "new_env must be a hostname-safe suffix: letters, numbers, hyphens" >&2
+  exit 1
+fi
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TF_DIR="${REPO_ROOT}/terraform/providers/${PROVIDER}"
@@ -36,15 +40,48 @@ fi
 
 cp "$SRC" "$DST"
 
-# Make a unique server_name
-sed -i.bak -E "s/^(server_name[[:space:]]*=[[:space:]]*\")[^\"]+(\".*)/\1\2-${NEW_ENV}\2/" "$DST" || true
-rm -f "${DST}.bak"
-sed -i.bak -E "s/^(server_name[[:space:]]*=[[:space:]]*\")([^\"]*)\"/\1\2-${NEW_ENV}\"/" "$DST"
-rm -f "${DST}.bak"
+tfvar_string() {
+  local key="$1"
+  local file="$2"
+  python3 - "$key" "$file" <<'PY'
+import re
+import sys
+
+key, path = sys.argv[1:]
+pattern = re.compile(rf'^(\s*{re.escape(key)}\s*=\s*")([^"]*)(".*)$', re.MULTILINE)
+text = open(path, encoding="utf-8").read()
+match = pattern.search(text)
+if not match:
+    raise SystemExit(f"missing {key} in {path}")
+print(match.group(2))
+PY
+}
+
+set_tfvar_string() {
+  local key="$1"
+  local value="$2"
+  local file="$3"
+  python3 - "$key" "$value" "$file" <<'PY'
+import re
+import sys
+
+key, value, path = sys.argv[1:]
+escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+pattern = re.compile(rf'^(\s*{re.escape(key)}\s*=\s*")([^"]*)(".*)$', re.MULTILINE)
+text = open(path, encoding="utf-8").read()
+new_text, count = pattern.subn(lambda m: f"{m.group(1)}{escaped}{m.group(3)}", text, count=1)
+if count != 1:
+    raise SystemExit(f"missing {key} in {path}")
+open(path, "w", encoding="utf-8").write(new_text)
+PY
+}
+
+# Make a unique server_name without disturbing the tfvars quotes or comments.
+server_name="$(tfvar_string server_name "$DST")"
+set_tfvar_string server_name "${server_name}-${NEW_ENV}" "$DST"
 
 if [[ -n "$NEW_ZONE" ]]; then
-  sed -i.bak -E "s/^(zone[[:space:]]*=[[:space:]]*\")[^\"]+(\".*)/\1${NEW_ZONE}\2/" "$DST"
-  rm -f "${DST}.bak"
+  set_tfvar_string zone "$NEW_ZONE" "$DST"
 fi
 
 cat <<EOF

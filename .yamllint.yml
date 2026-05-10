@@ -7,23 +7,17 @@ rules:
     level: warning
   truthy:
     allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: false
   comments:
     min-spaces-from-content: 1
   comments-indentation: false
   document-start: disable
-  # We intentionally align values in synthesis-style YAML (mirrors the
-  # vault's prose style); the default `colons: max-spaces-after: 1` rejects
-  # that. Disable the rule entirely.
-  colons: disable
-  # dependabot.yml uses `{ key: value, … }` flow mappings the default
-  # braces/commas rules reject. The rules add no signal in those cases.
-  braces: disable
-  commas: disable
   indentation:
     spaces: 2
     indent-sequences: true
 
 ignore: |
+  .ansible/
   .terraform/
   .venv/
   ansible/inventory/generated.ini

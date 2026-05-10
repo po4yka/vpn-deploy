@@ -29,13 +29,13 @@ resource "upcloud_firewall_rules" "vpn" {
       protocol               = "tcp"
       destination_port_start = "22"
       destination_port_end   = "22"
-      source_address_start   = split("/", firewall_rule.value)[0]
-      source_address_end     = split("/", firewall_rule.value)[0]
+      source_address_start   = cidrhost(firewall_rule.value, 0)
+      source_address_end     = cidrhost(firewall_rule.value, -1)
       comment                = "SSH allow ${firewall_rule.value}"
     }
   }
 
-  # Primary REALITY / nginx-xhttp
+  # Primary REALITY
   firewall_rule {
     action                 = "accept"
     direction              = "in"
@@ -43,7 +43,7 @@ resource "upcloud_firewall_rules" "vpn" {
     protocol               = "tcp"
     destination_port_start = "443"
     destination_port_end   = "443"
-    comment                = "TCP/443 VLESS+REALITY / nginx-xhttp"
+    comment                = "TCP/443 VLESS+REALITY"
   }
 
   firewall_rule {
@@ -53,7 +53,21 @@ resource "upcloud_firewall_rules" "vpn" {
     protocol               = "tcp"
     destination_port_start = "443"
     destination_port_end   = "443"
-    comment                = "TCP/443 IPv6"
+    comment                = "TCP/443 VLESS+REALITY IPv6"
+  }
+
+  # nginx-xhttp public HTTPS listener, separate from REALITY by default
+  dynamic "firewall_rule" {
+    for_each = var.nginx_xhttp_public_port == 443 ? [] : ["IPv4", "IPv6"]
+    content {
+      action                 = "accept"
+      direction              = "in"
+      family                 = firewall_rule.value
+      protocol               = "tcp"
+      destination_port_start = tostring(var.nginx_xhttp_public_port)
+      destination_port_end   = tostring(var.nginx_xhttp_public_port)
+      comment                = "TCP/${var.nginx_xhttp_public_port} nginx-xhttp"
+    }
   }
 
   # Hysteria2 — UDP/443, conditional

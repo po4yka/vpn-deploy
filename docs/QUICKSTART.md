@@ -7,9 +7,9 @@ target VPS by hand for routine setup.
 ## 0. Prerequisites
 
 ```
-terraform >= 1.13
+terraform >= 1.15
 ansible-core >= 2.19
-sops, age, gitleaks, jq, openssl
+sops, age, gitleaks, jq, openssl, python3 with PyYAML
 ssh, terraform-cli, upctl (UpCloud CLI, optional but useful)
 A domain you control with DNS (for nginx-xhttp + Hysteria TLS)
 A public certificate for that domain (Let's Encrypt is fine; not bundled)
@@ -69,6 +69,18 @@ Required: `zone`, `plan`, `storage_template`, `admin_ssh_public_key`
 (paste content of `~/.ssh/vpn_deploy.pub`), `allowed_ssh_cidrs` (your
 operator IP, **never** `0.0.0.0/0`).
 
+The default full-stack port layout is:
+
+| Profile | Public listener |
+|---|---|
+| P0 REALITY | TCP/443 |
+| P1 nginx-xhttp | TCP/8443 |
+| P2 Hysteria2 | UDP/443 |
+
+Keep `nginx_xhttp_public_port` at its default `8443` for single-host full-stack
+deploys. Direct-only hosts with `vpn.enable_xray_reality: false` may override
+both the Terraform variable and Ansible `nginx_xhttp_public_port` to `443`.
+
 Find a current Debian 13 / Ubuntu 24.04 template UUID:
 
 ```bash
@@ -85,7 +97,9 @@ $EDITOR ~/.config/vpn-provision/prod.secrets.yaml
 Fill: Xray version + sha256 (from the GitHub release page), REALITY keypair
 from step 2c, target+server_names (see `reality-target-selection-2026`),
 nginx_xhttp cert/key (your public CA cert for `vpn.example.com`), Hysteria
-version + sha256, AmneziaWG H1–H4 obfuscation params, restic password.
+version + sha256, geodata release URLs + sha256 values, AmneziaWG source
+pins (`amneziawg_go_version`, `amneziawg_tools_version`), AmneziaWG H1–H4
+obfuscation params, restic password.
 
 Add your first device:
 
@@ -145,13 +159,18 @@ SOPS_FILE=~/.config/vpn-provision/prod.secrets.sops.yaml \
 
 For AmneziaWG, `new-client.sh` prints a private key — hand it to the
 device through a secure channel and put it on the device, then forget it.
+For P1 XHTTP client profiles, use the nginx public port
+`nginx_xhttp_public_port` (`8443` by default), not the localhost Xray inbound
+port `nginx_xhttp_port`.
 
 ## 8. External health check
 
 ```bash
-SNI_TARGET=www.cloudflare.com \
-HTTP_HOST=vpn.example.com \
-./scripts/healthcheck.sh
+SNI_TARGET=www.cloudflare.com ./scripts/healthcheck.sh
+
+IP=$(terraform -chdir=terraform/providers/upcloud output -raw server_ipv4)
+curl -fsS --resolve "vpn.example.com:8443:${IP}" \
+  "https://vpn.example.com:8443/health"
 ```
 
 Then connect with the real client and run a real-life traffic test (curl

@@ -2,6 +2,12 @@
 # Managed by Ansible role `firewall`. Hand edits will be overwritten.
 
 flush ruleset
+{% set ssh_cidrs = [allowed_ssh_cidrs] if allowed_ssh_cidrs is string else (allowed_ssh_cidrs | default([])) %}
+{% set ssh_v4_cidrs = ssh_cidrs | select('match', '^(?!.*:).*') | list %}
+{% set ssh_v6_cidrs = ssh_cidrs | select('match', '.*:.*') | list %}
+{% set xray_tcp_port = xray_port | default(443) | int %}
+{% set nginx_tcp_port = nginx_xhttp_public_port | default(8443) | int %}
+{% set nginx_collides_with_xray = (vpn.enable_xray_reality | default(true)) and nginx_tcp_port == xray_tcp_port %}
 
 table inet filter {
   chain input {
@@ -15,16 +21,22 @@ table inet filter {
     ip protocol icmp accept
     ip6 nexthdr ipv6-icmp accept
 
-{% if allowed_ssh_cidrs %}
-    tcp dport 22 ip saddr { {{ allowed_ssh_cidrs | select('match', '^(?!.*:).*') | list | join(", ") if allowed_ssh_cidrs else '' }} } accept
-{% set v6cidrs = allowed_ssh_cidrs | select('match', '.*:.*') | list %}
-{% if v6cidrs %}
-    tcp dport 22 ip6 saddr { {{ v6cidrs | join(", ") }} } accept
+{% if ssh_v4_cidrs %}
+    tcp dport 22 ip saddr { {{ ssh_v4_cidrs | join(", ") }} } accept
 {% endif %}
+{% if ssh_v6_cidrs %}
+    tcp dport 22 ip6 saddr { {{ ssh_v6_cidrs | join(", ") }} } accept
 {% endif %}
 
-    # P0/P1 transports share TCP/443
-    tcp dport 443 accept
+{% if vpn.enable_xray_reality | default(true) %}
+    # P0 — REALITY over TCP
+    tcp dport {{ xray_tcp_port }} accept
+{% endif %}
+
+{% if (vpn.enable_nginx_xhttp | default(true)) and not nginx_collides_with_xray %}
+    # P1 — nginx-xhttp public HTTPS listener
+    tcp dport {{ nginx_tcp_port }} accept
+{% endif %}
 
 {% if vpn.enable_hysteria | default(false) %}
     # P2 — Hysteria2 UDP

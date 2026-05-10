@@ -56,11 +56,11 @@ matrix above before a human merges.
 | Ecosystem | Dependabot covers? | Where pinned | Refresh cadence |
 |---|---|---|---|
 | GitHub Actions | yes | `.github/workflows/*.yml` | weekly (Mon 09:00 UTC, grouped) |
-| Terraform providers | yes | `terraform/providers/*/versions.tf` | weekly per provider directory |
+| Terraform providers | yes | `terraform/providers/*/versions.tf` + `.terraform.lock.hcl` | weekly per provider directory |
 | Python tooling | yes | `requirements.txt` | weekly, grouped (ansible-core / ansible-lint / molecule / yamllint / jmespath) |
-| Ansible Galaxy collections | **no** | `requirements.yml` | manual quarterly review (see below) |
+| Ansible Galaxy collections | **no** | exact versions in `requirements.yml` | manual quarterly review (see below) |
 | Xray / Hysteria binaries | n/a (runtime only) | `secrets/prod.secrets.example.yaml` schema documents version + sha256 fields | operator decides per release; see `docs/RUNBOOK-rotate.md` and `xray-core-2026-transport-updates` synthesis |
-| geodata (geosite/geoip) | n/a | role pulls latest with optional sha256 pin | daily systemd timer on the VPS via `geodata` role |
+| geodata (geosite/geoip) | n/a | concrete URLs + sha256 values in the deployed vars file | daily systemd timer on the VPS via `geodata` role |
 
 ### Manual quarterly Galaxy collection refresh
 
@@ -74,7 +74,7 @@ grep -A1 'name:' requirements.yml
 ansible-galaxy collection list  # local cache
 # or browse https://galaxy.ansible.com/<collection>
 
-# Bump pins in requirements.yml; install fresh
+# Bump exact pins in requirements.yml; install fresh
 rm -rf ~/.ansible/collections
 ansible-galaxy collection install -r requirements.yml --force
 

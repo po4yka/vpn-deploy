@@ -1,9 +1,23 @@
 ---
-# P1 transport: nginx fronts 443/tcp and proxies a path to the Xray XHTTP
+# P1 transport: nginx fronts a configurable public TCP port and proxies a path to the Xray XHTTP
 # inbound on 127.0.0.1:{{ nginx_xhttp_port }}. RU baseline = direct foreign
 # VPS, no CDN. See docs/CDN-DECISION.md.
 #
 # Source: server-xray-vless concept page + xhttp-transport concept page.
+
+- name: Pre-flight — nginx public listener must not collide with REALITY
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (
+          (vpn.enable_xray_reality | default(true) | bool)
+          and ((nginx_xhttp_public_port | default(8443) | int) == (xray_port | default(443) | int))
+        )
+    fail_msg: |
+      nginx_xhttp_public_port={{ nginx_xhttp_public_port | default(8443) }} collides with
+      xray_port={{ xray_port | default(443) }} while REALITY is enabled. Keep REALITY
+      on TCP/443 for full-stack hosts and move nginx-xhttp to another public port,
+      or disable REALITY for a direct-only cohort before using 443.
 
 - name: Install nginx
   ansible.builtin.apt:

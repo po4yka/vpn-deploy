@@ -18,9 +18,16 @@
     group: "{{ item.group | default('root') }}"
     mode: "{{ item.mode }}"
   loop:
-    - { path: "{{ xray_etc_dir }}", mode: "0750", owner: "root", group: "{{ xray_runtime_group }}" }
-    - { path: "{{ xray_install_dir }}/releases", mode: "0755" }
-    - { path: "{{ xray_log_path }}", mode: "0750", owner: "{{ xray_runtime_user }}", group: "{{ xray_runtime_group }}" }
+    - path: "{{ xray_etc_dir }}"
+      mode: "0750"
+      owner: root
+      group: "{{ xray_runtime_group }}"
+    - path: "{{ xray_install_dir }}/releases"
+      mode: "0755"
+    - path: "{{ xray_log_path }}"
+      mode: "0750"
+      owner: "{{ xray_runtime_user }}"
+      group: "{{ xray_runtime_group }}"
 
 - name: Set architecture-specific Xray archive facts
   ansible.builtin.set_fact:

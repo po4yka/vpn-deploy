@@ -6,7 +6,7 @@ mirrors the four-tier model:
 
 ```
 P0 Primary       VLESS + REALITY + XTLS-Vision over RAW/TCP/443
-P1 HTTPS         VLESS/Trojan + XHTTP behind nginx (direct, no CDN)
+P1 HTTPS         VLESS/Trojan + XHTTP behind nginx (direct, no CDN, TCP/8443 by default)
 P2 UDP/QUIC      Hysteria2 on UDP/443
 P2 Device-VPN    AmneziaWG 2.0 (userspace)
 P3 Reachability  Manual — see RUNBOOK-incident.md (relays, WebRTC, roaming)
@@ -36,6 +36,18 @@ or this repo. Provider credentials live in env vars only.
 
 Cross-cutting roles: `baseline`, `firewall`, `monitoring`, `backup`,
 optional `subscription-host`.
+
+Default single-host port ownership:
+
+| Port | Owner | Variable |
+|---|---|---|
+| TCP/443 | P0 REALITY Xray inbound | `xray_port` |
+| TCP/8443 | P1 nginx public HTTPS listener | `nginx_xhttp_public_port` |
+| 127.0.0.1:10085 | P1 Xray XHTTP local inbound behind nginx | `nginx_xhttp_port` |
+| UDP/443 | P2 Hysteria2 | `hysteria_port` |
+
+Direct-only cohorts with REALITY disabled can set `nginx_xhttp_public_port` to
+`443`; full-stack hosts must keep the nginx public listener off `xray_port`.
 
 ## Disposable nodes
 

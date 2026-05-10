@@ -24,6 +24,10 @@ if [[ -z "${ANSIBLE_SSH_PRIVATE_KEY_FILE:-}" ]]; then
   exit 1
 fi
 
+for tool in terraform jq; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "missing: $tool" >&2; exit 1; }
+done
+
 if [[ -n "${HOSTS:-}" ]]; then
   HOST_LIST="$HOSTS"
 else
@@ -41,22 +45,42 @@ fi
 declare -a vpn_lines=()
 declare -A cohort_groups=()
 
+terraform_json_var() {
+  local tf_dir="$1"
+  local tfvars_rel="$2"
+  local expr="$3"
+  local raw
+  local decoded
+
+  raw="$(terraform -chdir="$tf_dir" console -no-color -var-file="$tfvars_rel" <<< "jsonencode(${expr})")"
+  decoded="$(jq -r . <<< "$raw")"
+  jq -c . <<< "$decoded"
+}
+
 for i in "${!host_pairs[@]}"; do
   pair="${host_pairs[$i]}"
   prov="${pair%:*}"
   env="${pair#*:}"
   tf_dir="${REPO_ROOT}/terraform/providers/${prov}"
+  tfvars_rel="environments/${env}.tfvars"
 
   if [[ ! -d "$tf_dir" ]]; then
     echo "no terraform root for provider '${prov}'" >&2
+    exit 1
+  fi
+  if [[ ! -f "${tf_dir}/${tfvars_rel}" ]]; then
+    echo "missing ${tf_dir}/${tfvars_rel}" >&2
     exit 1
   fi
 
   ip="$(terraform -chdir="$tf_dir" output -raw server_ipv4)"
   user="$(terraform -chdir="$tf_dir" output -raw admin_user)"
   hostname="$(terraform -chdir="$tf_dir" output -raw server_hostname)"
+  allowed_ssh_cidrs="$(terraform_json_var "$tf_dir" "$tfvars_rel" "var.allowed_ssh_cidrs")"
 
-  vpn_lines+=("${hostname} ansible_host=${ip} ansible_user=${user} provider=${prov} env=${env}")
+  vpn_line="${hostname} ansible_host=${ip} ansible_user=${user} provider=${prov} env=${env}"
+  vpn_line+=" allowed_ssh_cidrs=${allowed_ssh_cidrs}"
+  vpn_lines+=("$vpn_line")
 
   if [[ -n "${cohort_list[$i]:-}" ]]; then
     cohort="${cohort_list[$i]}"

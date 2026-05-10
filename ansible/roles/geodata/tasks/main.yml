@@ -1,6 +1,21 @@
 ---
 # Source: xray-core-2026-transport-updates (v26.4.25 #5992 — geodata hot-reload).
 
+- name: Pre-flight - geodata sources are pinned
+  ansible.builtin.assert:
+    that:
+      - geodata.geosite_url | length > 0
+      - geodata.geoip_url | length > 0
+      - "'/latest/' not in geodata.geosite_url"
+      - "'/latest/' not in geodata.geoip_url"
+      - geodata.geosite_sha256 is match('^[0-9a-fA-F]{64}$')
+      - geodata.geoip_sha256 is match('^[0-9a-fA-F]{64}$')
+    fail_msg: |
+      geodata requires pinned release URLs and SHA256 checksums. Set
+      geodata.geosite_url, geodata.geosite_sha256, geodata.geoip_url, and
+      geodata.geoip_sha256 to concrete release artifacts before enabling
+      vpn.enable_geodata.
+
 - name: Ensure geodata install directory
   ansible.builtin.file:
     path: "{{ geodata.install_dir }}"
@@ -14,7 +29,7 @@
     url: "{{ geodata.geosite_url }}"
     dest: "{{ geodata.install_dir }}/geosite.dat"
     mode: "0644"
-    checksum: "{{ ('sha256:' ~ geodata.geosite_sha256) if geodata.geosite_sha256 | length > 0 else omit }}"
+    checksum: "sha256:{{ geodata.geosite_sha256 }}"
     force: true
   notify: Reload xray geodata
 
@@ -23,7 +38,7 @@
     url: "{{ geodata.geoip_url }}"
     dest: "{{ geodata.install_dir }}/geoip.dat"
     mode: "0644"
-    checksum: "{{ ('sha256:' ~ geodata.geoip_sha256) if geodata.geoip_sha256 | length > 0 else omit }}"
+    checksum: "sha256:{{ geodata.geoip_sha256 }}"
     force: true
   notify: Reload xray geodata
 

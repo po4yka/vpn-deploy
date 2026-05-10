@@ -44,6 +44,17 @@ variable "enable_hysteria" {
   default = true
 }
 
+variable "nginx_xhttp_public_port" {
+  type        = number
+  default     = 8443
+  description = "Public TCP port for nginx-xhttp. Keep this in sync with Ansible nginx_xhttp_public_port."
+
+  validation {
+    condition     = var.nginx_xhttp_public_port >= 1 && var.nginx_xhttp_public_port <= 65535
+    error_message = "nginx_xhttp_public_port must be a valid TCP port."
+  }
+}
+
 variable "build_env" {
   type        = string
   default     = "prod"

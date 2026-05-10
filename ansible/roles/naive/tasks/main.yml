@@ -35,10 +35,20 @@
     group: "{{ item.group | default('root') }}"
     mode: "{{ item.mode }}"
   loop:
-    - { path: "{{ naive.install_dir }}", mode: "0755" }
-    - { path: "{{ naive.config_dir }}",  mode: "0750", owner: "root", group: "naive" }
-    - { path: "{{ naive.log_dir }}",     mode: "0750", owner: "naive", group: "naive" }
-    - { path: "{{ naive.decoy_root }}",  mode: "0755", owner: "www-data", group: "www-data" }
+    - path: "{{ naive.install_dir }}"
+      mode: "0755"
+    - path: "{{ naive.config_dir }}"
+      mode: "0750"
+      owner: root
+      group: naive
+    - path: "{{ naive.log_dir }}"
+      mode: "0750"
+      owner: naive
+      group: naive
+    - path: "{{ naive.decoy_root }}"
+      mode: "0755"
+      owner: www-data
+      group: www-data
 
 - name: Drop a plausible decoy index.html
   ansible.builtin.copy:
@@ -107,8 +117,10 @@
     group: naive
     mode: "0640"
   loop:
-    - { content: "{{ naive_secrets.cert_pem }}", dest: "{{ naive.config_dir }}/server.fullchain.pem" }
-    - { content: "{{ naive_secrets.key_pem }}",  dest: "{{ naive.config_dir }}/server.key" }
+    - content: "{{ naive_secrets.cert_pem }}"
+      dest: "{{ naive.config_dir }}/server.fullchain.pem"
+    - content: "{{ naive_secrets.key_pem }}"
+      dest: "{{ naive.config_dir }}/server.key"
   no_log: true
   diff: false
 
