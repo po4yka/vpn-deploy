@@ -15,11 +15,11 @@ jobs:
     name: gitleaks
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           fetch-depth: 0
       - name: Run gitleaks with repo rules
-        uses: gitleaks/gitleaks-action@v2.3.9
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2.3.9
         env:
           GITLEAKS_CONFIG: ./.gitleaks.toml
           GITLEAKS_NOTIFY_USER_LIST: ""
@@ -37,9 +37,9 @@ jobs:
       matrix:
         provider: [upcloud, hetzner, vultr]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      - uses: hashicorp/setup-terraform@v4
+      - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85  # v4
         with:
           terraform_version: "1.15.2"
 
@@ -59,9 +59,9 @@ jobs:
     name: cloud-init schema
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      - uses: hashicorp/setup-terraform@v4
+      - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85  # v4
         with:
           terraform_version: "1.15.2"
 
@@ -95,9 +95,9 @@ jobs:
     name: ansible-lint + syntax-check
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.12"
 
@@ -137,9 +137,9 @@ jobs:
           - backup
           - subscription-host
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.12"
 
@@ -159,7 +159,7 @@ jobs:
     name: shellcheck
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
       - name: Run shellcheck on every shell script
         run: |
           sudo apt-get update
@@ -170,12 +170,12 @@ jobs:
     name: secrets-coverage
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.12"
       - name: Install deps
-        run: pip install pyyaml jinja2
+        run: pip install -r requirements.txt
       - name: check-secrets-coverage
         run: python3 scripts/check-secrets-coverage.py
 
@@ -183,13 +183,13 @@ jobs:
     name: templates-render
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.12"
       - name: Install deps
         run: |
-          pip install pyyaml jinja2
+          pip install -r requirements.txt
           sudo apt-get update
           sudo apt-get install -y nginx-light
       - name: check-templates-render
@@ -199,11 +199,11 @@ jobs:
     name: yamllint
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
         with:
           python-version: "3.12"
       - name: Install yamllint
-        run: pip install yamllint==1.38.0
+        run: pip install -r requirements.txt
       - name: yamllint
         run: yamllint -c .yamllint.yml .
