@@ -11,7 +11,9 @@ TFPLAN        := $(TF_ROOT)/$(ENV).tfplan
 export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
 
 .PHONY: help init validate plan apply inventory wait decrypt dry-run deploy verify clean \
-        rollback-xray rollback-config rotate-credentials check-prereqs
+        rollback-xray rollback-config rotate-credentials check-prereqs \
+        destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
+        molecule-test
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -37,6 +39,14 @@ help:
 	@echo "  rollback-xray ROLLBACK_XRAY_VERSION=vX.Y.Z"
 	@echo "  rollback-config"
 	@echo "  rotate-credentials"
+	@echo ""
+	@echo "  destroy           Safe terraform destroy (double confirmation)"
+	@echo "  backup-state      age-encrypt the local terraform state"
+	@echo "  burn-check        External IP reachability probe (check-host.net)"
+	@echo "  diff-secrets      Drift detection between deployed config and current secrets"
+	@echo "  emit-singbox CLIENT=<name>  Emit full sing-box client JSON"
+	@echo "  install-hooks     Install pre-commit hooks for this repo"
+	@echo "  molecule-test ROLE=<name>   Run molecule test for one role"
 
 check-prereqs:
 	@for tool in terraform ansible ansible-playbook ansible-lint sops age gitleaks jq ssh; do \
@@ -108,3 +118,29 @@ rollback-config:
 rotate-credentials:
 	VPN_SECRETS_FILE=$(SECRETS_FILE) \
 	ansible-playbook $(ANSIBLE_DIR)/playbooks/rotate-credentials.yml
+
+destroy:
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/destroy.sh
+
+backup-state:
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/backup-tf-state.sh
+
+burn-check:
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/burn-check.sh
+
+diff-secrets:
+	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
+	PROVIDER=$(PROVIDER) ENV=$(ENV) SECRETS_FILE=$(SECRETS_FILE) ./scripts/diff-secrets.sh
+
+emit-singbox:
+	@test -n "$(CLIENT)" || { echo "CLIENT=<name> required"; exit 1; }
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/emit-singbox.sh $(CLIENT)
+
+install-hooks:
+	pip install --user pre-commit
+	pre-commit install
+	pre-commit install --hook-type commit-msg
+
+molecule-test:
+	@test -n "$(ROLE)" || { echo "ROLE=<role-name> required (e.g. baseline, firewall, xray)"; exit 1; }
+	cd $(ANSIBLE_DIR)/roles/$(ROLE) && molecule test

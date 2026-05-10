@@ -1,0 +1,13 @@
+---
+# Cohort: P1+P2 nodes (no REALITY direct path). Used by hosts in the
+# [vpn-p1p2] inventory group.
+
+vpn:
+  enable_xray_reality: false
+  enable_nginx_xhttp: true
+  enable_hysteria: true
+  enable_amneziawg: true
+  enable_monitoring: true
+  enable_watchdog: true
+  enable_backup: true
+  enable_subscription_host: false

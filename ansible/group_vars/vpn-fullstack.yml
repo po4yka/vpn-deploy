@@ -1,0 +1,14 @@
+---
+# Cohort: full P0+P1+P2 stack on one node. Same as group_vars/all.yml
+# defaults but explicit, so a host placed in [vpn-fullstack] inherits it
+# even if all.yml is overridden later.
+
+vpn:
+  enable_xray_reality: true
+  enable_nginx_xhttp: true
+  enable_hysteria: true
+  enable_amneziawg: true
+  enable_monitoring: true
+  enable_watchdog: true
+  enable_backup: true
+  enable_subscription_host: false

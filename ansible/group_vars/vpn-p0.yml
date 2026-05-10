@@ -1,0 +1,13 @@
+---
+# Cohort: P0-only nodes. Used by hosts in the [vpn-p0] inventory group.
+# Activate by passing COHORTS=p0 to render-inventory.sh.
+
+vpn:
+  enable_xray_reality: true
+  enable_nginx_xhttp: false
+  enable_hysteria: false
+  enable_amneziawg: false
+  enable_monitoring: true
+  enable_watchdog: true
+  enable_backup: true
+  enable_subscription_host: false

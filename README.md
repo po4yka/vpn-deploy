@@ -36,13 +36,15 @@ Switch via `make PROVIDER=upcloud …`.
 3. `docs/CDN-DECISION.md` — explicit ADR: Cloudflare CDN is **not** the RU
    baseline; nginx-xhttp role is direct-only by default.
 4. `docs/SECRETS.md` — SOPS+age model, age-key recovery, rotation.
-5. `docs/RUNBOOK-deploy.md` — full deploy procedure.
+5. `docs/AGE-RECOVERY.md` — Shamir-split the age key for k-of-n recovery.
+6. `docs/RUNBOOK-deploy.md` — full deploy procedure.
 
 Operational runbooks: `docs/RUNBOOK-{rotate,rollback,incident,restore,add-fallback}.md`.
 
 ## Make targets
 
 ```
+# Core lifecycle
 make init        # terraform init for the chosen PROVIDER
 make validate    # fmt, validate, gitleaks, ansible-lint
 make decrypt     # sops --decrypt → /tmp/vpn-<env>.secrets.yaml
@@ -54,7 +56,20 @@ make dry-run     # ansible-playbook --check --diff
 make deploy      # ansible-playbook site.yml
 make verify      # post-deploy verification playbook
 make clean       # shred decrypted secrets
+
+# Rollback / rotation
 make rollback-xray ROLLBACK_XRAY_VERSION=vX.Y.Z
+make rollback-config
+make rotate-credentials
+
+# Operations
+make destroy                              # safe, double-confirmation destroy
+make backup-state                         # age-encrypt local TF state
+make burn-check                           # external IP reachability probe
+make diff-secrets                         # drift detection
+make emit-singbox CLIENT=<name>           # full sing-box client JSON
+make install-hooks                        # one-time pre-commit setup
+make molecule-test ROLE=<name>            # role-level idempotence test
 ```
 
 ## Hard rules

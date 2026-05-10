@@ -1,0 +1,21 @@
+---
+- name: Converge firewall role
+  hosts: all
+  become: true
+  vars:
+    allowed_ssh_cidrs:
+      - "10.0.0.0/8"
+      - "203.0.113.0/24"
+    vpn:
+      enable_hysteria: true
+      enable_amneziawg: false
+    amneziawg:
+      listen_port: 51820
+  pre_tasks:
+    - name: Install nftables (baseline normally does this)
+      ansible.builtin.apt:
+        name: nftables
+        state: present
+        update_cache: true
+  roles:
+    - role: firewall

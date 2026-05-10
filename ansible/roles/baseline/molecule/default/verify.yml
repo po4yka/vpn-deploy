@@ -1,0 +1,28 @@
+---
+- name: Verify baseline role
+  hosts: all
+  become: true
+  tasks:
+    - name: nftables installed
+      ansible.builtin.command:
+        cmd: nft --version
+      changed_when: false
+
+    - name: SSH hardening drop-in present
+      ansible.builtin.stat:
+        path: /etc/ssh/sshd_config.d/20-ansible-hardening.conf
+      register: hardening
+      failed_when: not hardening.stat.exists
+
+    - name: sysctl tuning installed
+      ansible.builtin.stat:
+        path: /etc/sysctl.d/90-vpn.conf
+      register: sysctl
+      failed_when: not sysctl.stat.exists
+
+    - name: timesync enabled
+      ansible.builtin.command:
+        cmd: systemctl is-enabled systemd-timesyncd
+      register: ts
+      changed_when: false
+      failed_when: ts.stdout != "enabled"

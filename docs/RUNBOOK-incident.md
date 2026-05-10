@@ -10,13 +10,13 @@ symptom; cross-reference the linked runbook for the recovery procedure.
 | Single client URI leaked / device lost | Per-device | `RUNBOOK-rotate.md` § 1 |
 | REALITY private key leaked | Server-wide | `RUNBOOK-rotate.md` § 2, then reissue every client |
 | Subscription URL leaked publicly | Token | rotate subscription tokens; see `subscription-delivery-plane-2026 § 17` |
-| TLS handshake to VPS fails from many networks at once | IP burned | blue-green to new VPS, different ASN if possible |
+| TLS handshake to VPS fails from many networks at once | IP burned | run `make burn-check` to confirm; then blue-green to new VPS, different ASN if possible |
 | Slow / lossy on one network only, fine elsewhere | Routing / ISP-specific | first try `Hysteria2` fallback; if persistent, blue-green to different region |
 | `xray run -test -config` fails after deploy | Config bug | `RUNBOOK-rollback.md` § 1 (config rollback, automatic via handler rescue) |
 | New Xray release crashes / leaks | Binary | `RUNBOOK-rollback.md` § 2 (binary rollback) |
 | Operator workstation compromised | Operator | rotate SSH key + age key + REALITY key + restic password; full credential rotation |
 | Lost SSH access (key deleted) | Operator | see § "Lost SSH access" below |
-| Lost SOPS age private key | Operator | see § "Lost age key" below |
+| Lost SOPS age private key | Operator | see § "Lost age key" below; if you set up Shamir split (`docs/AGE-RECOVERY.md`), reconstruct from k shares first |
 | Lost Terraform state file | Operator | see § "State loss" below |
 | 3x-ui / Marzban / Remnawave panel exposed | Architecture deviation | this stack has no panel by design; if you added one, take it offline NOW |
 | Suspected RKN / TSPU active probing | Threat-model | review `vless-graylist-active-probing-defense`; check REALITY target hygiene |
@@ -68,6 +68,20 @@ belong to this deployment. Lose it and:
 - `terraform destroy` does nothing (no resources to destroy).
 - `make rollback-…` blue-green flows still work but become manual (you
   edit the UpCloud console / API directly).
+
+Recovery path 0 — restore from `make backup-state` snapshot (preferred):
+
+```bash
+# State backups live in ~/.config/vpn-provision/state-backups/<provider>-<env>-<timestamp>.tfstate.age
+LATEST=$(ls -1t ~/.config/vpn-provision/state-backups/upcloud-prod-*.tfstate.age | head -1)
+age -d -i ~/.config/vpn-provision/age.key \
+    -o terraform/providers/upcloud/terraform.tfstate \
+    "$LATEST"
+chmod 0600 terraform/providers/upcloud/terraform.tfstate
+
+terraform -chdir=terraform/providers/upcloud plan
+# Expect: no changes
+```
 
 Recovery path 1 — state was committed on a partner workstation:
 

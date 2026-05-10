@@ -117,6 +117,32 @@ jobs:
           VPN_SECRETS_FILE: ${{ github.workspace }}/secrets/prod.secrets.example.yaml
         run: ansible-playbook playbooks/site.yml --syntax-check -i 'localhost,'
 
+  molecule:
+    name: molecule (${{ matrix.role }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        role: [baseline, firewall, xray]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned tooling
+        run: |
+          pip install -r requirements.txt
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: molecule test
+        working-directory: ansible/roles/${{ matrix.role }}
+        run: molecule test
+        env:
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"
+
   yaml:
     name: yamllint
     runs-on: ubuntu-24.04

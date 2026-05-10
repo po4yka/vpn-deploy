@@ -1,0 +1,10 @@
+---
+watchdog:
+  interval: "5min"             # systemd OnCalendar / OnUnitActiveSec
+  fail_threshold: 3            # consecutive failed probes before alerting
+  state_file: /var/lib/vpn-watchdog/state
+  alerts_per_hour_max: 4       # rate-limit so a flapping host doesn't spam
+  # Provider: ntfy.sh (default) or pushover.
+  # ntfy is HTTP POST to ntfy.topic; no signup, but anyone with the topic
+  # can read alerts. Use a long random topic name and treat it as a secret.
+  provider: ntfy
