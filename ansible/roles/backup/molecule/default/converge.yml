@@ -1,0 +1,20 @@
+---
+- name: Converge backup role (no remote sync)
+  hosts: all
+  become: true
+  vars:
+    restic_repo_dir: /var/backups/vpn-restic
+    backup:
+      restic_password: "molecule-stub-password"
+      remote:
+        enabled: false
+  pre_tasks:
+    - name: Ensure /etc/restic exists (role expects it for the password file)
+      ansible.builtin.file:
+        path: /etc/restic
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+  roles:
+    - role: backup

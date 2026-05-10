@@ -123,7 +123,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        role: [baseline, firewall, xray]
+        role:
+          - baseline
+          - firewall
+          - xray
+          - hysteria
+          - nginx-xhttp
+          - watchdog
+          - monitoring
+          - backup
+          - subscription-host
     steps:
       - uses: actions/checkout@v4
 
@@ -142,6 +151,46 @@ jobs:
         env:
           PY_COLORS: "1"
           ANSIBLE_FORCE_COLOR: "1"
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck on every shell script
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          shellcheck -s bash -S warning scripts/*.sh
+
+  secrets-coverage:
+    name: secrets-coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install pyyaml jinja2
+      - name: check-secrets-coverage
+        run: python3 scripts/check-secrets-coverage.py
+
+  templates-render:
+    name: templates-render
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          pip install pyyaml jinja2
+          sudo apt-get update
+          sudo apt-get install -y nginx-light
+      - name: check-templates-render
+        run: python3 scripts/check-templates-render.py
 
   yaml:
     name: yamllint

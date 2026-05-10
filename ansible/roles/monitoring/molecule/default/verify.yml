@@ -1,0 +1,30 @@
+---
+- name: Verify monitoring role
+  hosts: all
+  become: true
+  tasks:
+    - name: node_exporter installed
+      ansible.builtin.stat:
+        path: /usr/bin/prometheus-node-exporter
+      register: ne
+      failed_when: not ne.stat.exists
+
+    - name: node_exporter listens on loopback only
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q '127.0.0.1:9100' /etc/default/prometheus-node-exporter
+        executable: /bin/bash
+      changed_when: false
+
+    - name: journald hardening config present
+      ansible.builtin.stat:
+        path: /etc/systemd/journald.conf.d/vpn.conf
+      register: jc
+      failed_when: not jc.stat.exists
+
+    - name: logrotate xray config present
+      ansible.builtin.stat:
+        path: /etc/logrotate.d/xray
+      register: lr
+      failed_when: not lr.stat.exists

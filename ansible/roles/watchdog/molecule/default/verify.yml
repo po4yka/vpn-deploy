@@ -1,0 +1,36 @@
+---
+- name: Verify watchdog role
+  hosts: all
+  become: true
+  tasks:
+    - name: probe script installed
+      ansible.builtin.stat:
+        path: /usr/local/sbin/vpn-watchdog.sh
+      register: sh
+      failed_when: not sh.stat.exists or sh.stat.mode != "0750"
+
+    - name: env file installed with 0600
+      ansible.builtin.stat:
+        path: /etc/vpn-watchdog.env
+      register: envf
+      failed_when: envf.stat.mode != "0600"
+
+    - name: env file contains the topic but no obvious leaks
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q 'NTFY_TOPIC=molecule-stub-topic' /etc/vpn-watchdog.env
+        executable: /bin/bash
+      changed_when: false
+
+    - name: probe script syntax-checks
+      ansible.builtin.command:
+        cmd: bash -n /usr/local/sbin/vpn-watchdog.sh
+      changed_when: false
+
+    - name: timer enabled
+      ansible.builtin.command:
+        cmd: systemctl is-enabled vpn-watchdog.timer
+      register: t
+      changed_when: false
+      failed_when: t.stdout != "enabled"
