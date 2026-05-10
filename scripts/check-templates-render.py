@@ -140,6 +140,23 @@ def validate_nginx(text: str, label: str) -> str | None:
         stripped,
     )
 
+    # Rewrite privileged listen ports (<1024) to high unprivileged ones.
+    # nginx -t on Debian/Ubuntu probes SO_REUSEPORT availability and fails
+    # `bind() to 0.0.0.0:80 failed (13: Permission denied)` for the unrooted
+    # CI runner. Real binding happens at deploy time as root.
+    def _lift_port(match: "_re.Match[str]") -> str:
+        prefix, port_str = match.group(1), match.group(2)
+        port = int(port_str)
+        if port < 1024:
+            port += 18000
+        return f"{prefix}{port}"
+
+    stripped = _re.sub(
+        r"(\blisten\s+(?:\[::\]:)?)(\d+)\b",
+        _lift_port,
+        stripped,
+    )
+
     # Use a writable prefix so nginx -t can open its default access/error logs
     # and pid file. Pass empty access/error logs via -e and -g pid.
     prefix = tempfile.mkdtemp(prefix="vpn-nginx-")
