@@ -11,6 +11,11 @@ on:
 
 permissions:
   contents: read
+  # `actions: read` is required for the `actions` language analyzer —
+  # CodeQL fetches workflow run metadata via the REST API
+  # (workflow-runs#get-a-workflow-run) and fails with
+  # "Resource not accessible by integration" without it.
+  actions: read
   security-events: write
 
 jobs:
