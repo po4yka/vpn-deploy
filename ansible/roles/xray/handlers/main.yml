@@ -4,6 +4,9 @@
     daemon_reload: true
 
 - name: Restart xray
+  # Handler `block:` does not register the wrapper name as a handler in
+  # ansible-core 2.18+, so notify uses `listen:` to dispatch by topic.
+  listen: Restart xray
   block:
     - name: Test Xray config before restart
       ansible.builtin.command:

@@ -25,7 +25,9 @@
   # plainly and validate the full config below.
   ansible.builtin.template:
     src: revoked-tokens.map.j2
-    dest: /etc/nginx/conf.d/vpn-sub-revoked.map
+    # Debian's default nginx.conf includes /etc/nginx/conf.d/*.conf only,
+    # so the map snippet must use a .conf extension to be loaded.
+    dest: /etc/nginx/conf.d/vpn-sub-revoked.conf
     owner: root
     group: root
     mode: "0644"

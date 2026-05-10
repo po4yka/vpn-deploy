@@ -64,7 +64,7 @@
     owner: root
     group: root
     mode: "0644"
-    validate: "sshd -t -f /etc/ssh/sshd_config"
+    validate: "sshd -t -f %s"
   notify: Reload ssh
 
 - name: Drop sysctl tuning

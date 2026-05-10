@@ -19,7 +19,7 @@ server {
     # Captures the token into $vpn_sub_token so the revocation map can read it.
     # Quote the regex: nginx parses bare `{16,64}` as a block opener.
     location ~ "^/sub/(?<vpn_sub_token>[A-Za-z0-9_-]{16,64})$" {
-        # Short-circuit revoked tokens (map lives in conf.d/vpn-sub-revoked.map)
+        # Short-circuit revoked tokens (map lives in conf.d/vpn-sub-revoked.conf)
         if ($vpn_sub_revoked = 1) {
             return 410;
         }

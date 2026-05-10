@@ -18,7 +18,7 @@
       ansible.builtin.shell:
         cmd: |
           set -o pipefail
-          grep -q 'deadbeefdeadbeefdeadbeef.*1' /etc/nginx/conf.d/vpn-sub-revoked.map
+          grep -q 'deadbeefdeadbeefdeadbeef.*1' /etc/nginx/conf.d/vpn-sub-revoked.conf
         executable: /bin/bash
       changed_when: false
 
