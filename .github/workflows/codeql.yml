@@ -9,36 +9,37 @@ on:
     # Weekly Sunday 06:00 UTC, off-peak for the runner pool
     - cron: '0 6 * * 0'
 
+# Top-level read-only — Scorecard's Token-Permissions check rewards
+# this. Write scopes elevate at job level.
 permissions:
   contents: read
-  # `actions: read` is required for the `actions` language analyzer —
-  # CodeQL fetches workflow run metadata via the REST API
-  # (workflow-runs#get-a-workflow-run) and fails with
-  # "Resource not accessible by integration" without it.
   actions: read
-  security-events: write
 
 jobs:
   analyze:
     name: codeql (${{ matrix.language }})
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
         language: [python, actions]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
       - name: Initialise CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e  # v4
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v4
+        uses: github/codeql-action/autobuild@68bde559dea0fdcac2102bfdf6230c5f70eb485e  # v4
 
       - name: Analyse
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@68bde559dea0fdcac2102bfdf6230c5f70eb485e  # v4
         with:
           category: "/language:${{ matrix.language }}"

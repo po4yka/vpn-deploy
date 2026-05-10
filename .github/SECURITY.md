@@ -19,9 +19,13 @@ Do **NOT** open a public issue for these:
 
 Channel:
 
-- Email: **security@<your-domain>** (set this up; the placeholder here is
-  a project-default — replace before relying on it).
-- Or Signal / encrypted DM to the maintainer.
+- Preferred: open a **private security advisory** at
+  <https://github.com/po4yka/vpn-deploy/security/advisories/new> —
+  it lets the maintainer triage privately and publish a fix
+  alongside a CVE if warranted.
+- Fallback: encrypted DM to the maintainer (Signal / age-encrypted
+  email). The maintainer's public age recipient lives in repo
+  metadata; rotate via the same channel once contact is established.
 
 Expected acknowledgement window: **24 hours**.
 
