@@ -1,0 +1,20 @@
+# Obsidian-style wikilinks resolve only inside the censorship-bypass vault.
+# lychee can't follow them; ignore the pattern.
+\[\[[^\]]+\]\]
+
+# Anchors that lychee can't statically resolve in collapsed/expanded sections
+^#
+
+# Local file refs we don't ship to GitHub
+file://
+
+# Placeholder/example URLs in docs
+^https?://example\.(com|org|test)
+^https?://vpn\.example\.(com|test)
+^https?://sub\.example\.(com|test)
+
+# RFC link rot is upstream's problem
+^https?://datatracker\.ietf\.org/doc/html/rfc
+
+# Internal vault paths referenced by name
+^wikis/
