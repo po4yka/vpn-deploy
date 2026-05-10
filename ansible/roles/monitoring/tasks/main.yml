@@ -32,6 +32,14 @@
     enabled: true
     state: started
 
+- name: Ensure journald drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Drop journald hardening config
   ansible.builtin.copy:
     dest: /etc/systemd/journald.conf.d/vpn.conf
