@@ -47,6 +47,47 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 | `make verify` | post-deploy gates assert services up, listeners present |
 | `make smoke-test` | end-to-end real-traffic dial through every enabled profile |
 
+## Dependency updates
+
+Pinned versions are not maintained by hand — Dependabot opens weekly PRs
+for the ecosystems it supports, and each PR runs through the full CI
+matrix above before a human merges.
+
+| Ecosystem | Dependabot covers? | Where pinned | Refresh cadence |
+|---|---|---|---|
+| GitHub Actions | yes | `.github/workflows/*.yml` | weekly (Mon 09:00 UTC, grouped) |
+| Terraform providers | yes | `terraform/providers/*/versions.tf` | weekly per provider directory |
+| Python tooling | yes | `requirements.txt` | weekly, grouped (ansible-core / ansible-lint / molecule / yamllint / jmespath) |
+| Ansible Galaxy collections | **no** | `requirements.yml` | manual quarterly review (see below) |
+| Xray / Hysteria binaries | n/a (runtime only) | `secrets/prod.secrets.example.yaml` schema documents version + sha256 fields | operator decides per release; see `docs/RUNBOOK-rotate.md` and `xray-core-2026-transport-updates` synthesis |
+| geodata (geosite/geoip) | n/a | role pulls latest with optional sha256 pin | daily systemd timer on the VPS via `geodata` role |
+
+### Manual quarterly Galaxy collection refresh
+
+Dependabot does not yet support Ansible Galaxy. Once a quarter, run:
+
+```bash
+# Inspect current pins
+grep -A1 'name:' requirements.yml
+
+# Check upstream for newer versions
+ansible-galaxy collection list  # local cache
+# or browse https://galaxy.ansible.com/<collection>
+
+# Bump pins in requirements.yml; install fresh
+rm -rf ~/.ansible/collections
+ansible-galaxy collection install -r requirements.yml --force
+
+# Re-run molecule on at least one role
+make molecule-test ROLE=baseline
+
+# Commit with: chore(deps): refresh Ansible Galaxy collections
+```
+
+Auto-merge is intentionally **not** enabled for any Dependabot PR — every
+update goes through a human review. Operators who want auto-merge can
+configure it per-ecosystem in repo Settings.
+
 ## What is intentionally NOT tested
 
 - **Live external network reachability of upstream geodata / Xray / Hysteria

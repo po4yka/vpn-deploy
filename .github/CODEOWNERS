@@ -1,0 +1,15 @@
+# CODEOWNERS — review routing.
+#
+# This is single-operator by default. If you bring on a second operator,
+# split per-area (e.g. terraform → @ops, docs → @docs).
+#
+# CODEOWNERS is enforced only when branch protection has "Require review
+# from Code Owners" enabled — see docs/BRANCH-PROTECTION.md.
+
+* @po4yka
+
+# Specific area owners — add as the team grows
+# /terraform/        @po4yka @<infra-operator>
+# /ansible/          @po4yka
+# /docs/             @po4yka @<docs-owner>
+# /.github/          @po4yka

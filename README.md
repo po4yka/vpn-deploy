@@ -1,5 +1,10 @@
 # vpn-deploy
 
+[![ci](https://github.com/po4yka/vpn-deploy/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/po4yka/vpn-deploy/actions/workflows/ci.yml)
+[![codeql](https://github.com/po4yka/vpn-deploy/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/po4yka/vpn-deploy/actions/workflows/codeql.yml)
+[![scorecard](https://api.securityscorecards.dev/projects/github.com/po4yka/vpn-deploy/badge)](https://securityscorecards.dev/viewer/?uri=github.com/po4yka/vpn-deploy)
+[![release](https://img.shields.io/github/v/release/po4yka/vpn-deploy?sort=semver)](https://github.com/po4yka/vpn-deploy/releases)
+
 Reproducible VPN deployment automation for the multi-profile access stack
 (`P0` VLESS+REALITY+Vision → `P1` nginx+XHTTP direct → `P2` Hysteria2 +
 AmneziaWG). Built around the model from
@@ -38,9 +43,20 @@ Switch via `make PROVIDER=upcloud …`.
 4. `docs/SECRETS.md` — SOPS+age model, age-key recovery, rotation.
 5. `docs/AGE-RECOVERY.md` — Shamir-split the age key for k-of-n recovery.
 6. `docs/TESTING.md` — coverage matrix and what's intentionally not tested.
-7. `docs/RUNBOOK-deploy.md` — full deploy procedure.
+7. `docs/BRANCH-PROTECTION.md` — apply required-status-check rules via GH API.
+8. `docs/RUNBOOK-deploy.md` — full deploy procedure.
 
 Operational runbooks: `docs/RUNBOOK-{rotate,rollback,incident,restore,add-fallback}.md`.
+
+## Contributing
+
+PRs welcome — see `CONTRIBUTING.md`. Subjects follow Conventional Commits;
+release-please picks them up automatically.
+
+## Security
+
+Critical issues (active probing, IP burn, key leak) → private channel per
+`.github/SECURITY.md`. Don't open public issues for those.
 
 ## Make targets
 
