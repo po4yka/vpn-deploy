@@ -15,19 +15,23 @@ jobs:
   release:
     name: release-please
     runs-on: ubuntu-24.04
-    # release-please can't run unless the operator has enabled
-    # Settings → Actions → General → "Allow GitHub Actions to create
-    # and approve pull requests". Until that's on the run will fail
-    # with "GitHub Actions is not permitted to create or approve pull
-    # requests" — that's a setup gate, not a repo-correctness issue.
-    # continue-on-error keeps the overall workflow green so unrelated
-    # CI checks aren't masked by release-please's setup state.
-    continue-on-error: true
+    # release-please needs two prerequisites the workflow can't enable
+    # for itself:
+    #   1. Settings → Actions → General → "Allow GitHub Actions to
+    #      create and approve pull requests" (toggle on).
+    #   2. Repo variable `RELEASE_PLEASE_ENABLED=true` (Settings →
+    #      Secrets and variables → Actions → Variables).
+    # Until both are set the job is skipped — the run reports
+    # "skipped", not "failed", so it doesn't pollute the run summary.
+    if: ${{ vars.RELEASE_PLEASE_ENABLED == 'true' }}
     permissions:
       contents: write
       pull-requests: write
     steps:
       - uses: googleapis/release-please-action@v5
+        # Even with the Settings toggle on, transient release-please
+        # parser issues shouldn't fail CI; this job is informational.
+        continue-on-error: true
         with:
           config-file: .github/release-please-config.json
           manifest-file: .github/release-please-manifest.json
