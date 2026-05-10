@@ -53,6 +53,8 @@ paths = [
     '''README\.md''',
     '''.*\.example\..*''',
     '''ansible/roles/.*/molecule/.*''',
+    '''scripts/new-client\.sh''',
+    '''scripts/emit-singbox\.sh''',
 ]
 regexes = [
     '''REPLACE_WITH_[A-Z_]+''',

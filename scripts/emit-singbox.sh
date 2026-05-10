@@ -69,7 +69,6 @@ for i in "${!host_pairs[@]}"; do
   chmod 0600 "$secrets_tmp"
 
   server_ip="$(terraform -chdir="$tf_dir" output -raw server_ipv4)"
-  server_host="$(terraform -chdir="$tf_dir" output -raw server_hostname)"
   tag_prefix="${prov}-${env}"
 
   client_json="$(jq --arg name "$CLIENT_NAME" '.xray.clients[]? | select(.name==$name)' "$secrets_tmp")"
