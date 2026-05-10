@@ -10,7 +10,8 @@
     ".": {
       "package-name": "vpn-deploy",
       "changelog-path": "CHANGELOG.md",
-      "extra-files": []
+      "extra-files": [],
+      "bootstrap-sha": "1736c5632ff48f73f0f731ed80532f51b6600712"
     }
   },
   "changelog-sections": [
