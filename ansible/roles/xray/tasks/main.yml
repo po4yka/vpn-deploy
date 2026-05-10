@@ -1,0 +1,123 @@
+---
+# Source: reproducible-vps-provisioning-2026 §8 + server-xray-vless concept page.
+# Pinning, symlink rollback, validate-before-restart, .prev backup.
+
+- name: Create xray system user
+  ansible.builtin.user:
+    name: "{{ xray_runtime_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/xray
+    create_home: true
+
+- name: Ensure xray directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ xray_etc_dir }}", mode: "0750", owner: "root", group: "{{ xray_runtime_group }}" }
+    - { path: "{{ xray_install_dir }}/releases", mode: "0755" }
+    - { path: "{{ xray_log_path }}", mode: "0750", owner: "{{ xray_runtime_user }}", group: "{{ xray_runtime_group }}" }
+
+- name: Set architecture-specific Xray archive facts
+  ansible.builtin.set_fact:
+    xray_arch: "{{ '64' if ansible_architecture == 'x86_64' else 'arm64-v8a' }}"
+    xray_sha256: >-
+      {{ (xray.linux_amd64_sha256 if ansible_architecture == 'x86_64'
+          else xray.linux_arm64_sha256 | default('')) }}
+
+- name: SHA256 for current architecture is set
+  ansible.builtin.assert:
+    that:
+      - xray_sha256 | length > 0
+    fail_msg: |
+      No checksum for architecture {{ ansible_architecture }}. Add the right
+      key (linux_amd64_sha256 or linux_arm64_sha256) to your secrets file.
+
+- name: Download pinned Xray release
+  ansible.builtin.get_url:
+    url: "https://github.com/XTLS/Xray-core/releases/download/{{ xray.version }}/Xray-linux-{{ xray_arch }}.zip"
+    dest: "/tmp/xray-{{ xray.version }}-linux-{{ xray_arch }}.zip"
+    checksum: "sha256:{{ xray_sha256 }}"
+    mode: "0644"
+
+- name: Create release directory
+  ansible.builtin.file:
+    path: "{{ xray_install_dir }}/releases/{{ xray.version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Unpack Xray release
+  ansible.builtin.unarchive:
+    src: "/tmp/xray-{{ xray.version }}-linux-{{ xray_arch }}.zip"
+    dest: "{{ xray_install_dir }}/releases/{{ xray.version }}"
+    remote_src: true
+    creates: "{{ xray_install_dir }}/releases/{{ xray.version }}/xray"
+
+- name: Ensure xray binary executable
+  ansible.builtin.file:
+    path: "{{ xray_install_dir }}/releases/{{ xray.version }}/xray"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Point current symlink to pinned release
+  ansible.builtin.file:
+    src: "{{ xray_install_dir }}/releases/{{ xray.version }}"
+    dest: "{{ xray_install_dir }}/current"
+    state: link
+    force: true
+  notify: Restart xray
+
+- name: Link xray into local bin
+  ansible.builtin.file:
+    src: "{{ xray_install_dir }}/current/xray"
+    dest: /usr/local/bin/xray
+    state: link
+    force: true
+
+- name: Install xray systemd unit
+  ansible.builtin.template:
+    src: xray.service.j2
+    dest: /etc/systemd/system/xray.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart xray
+
+- name: Backup previous Xray config if exists
+  ansible.builtin.copy:
+    src: "{{ xray_etc_dir }}/config.json"
+    dest: "{{ xray_etc_dir }}/config.json.prev"
+    remote_src: true
+    owner: root
+    group: "{{ xray_runtime_group }}"
+    mode: "0640"
+  ignore_errors: true
+  changed_when: false
+
+- name: Render and validate Xray config
+  ansible.builtin.template:
+    src: config.json.j2
+    dest: "{{ xray_etc_dir }}/config.json"
+    owner: root
+    group: "{{ xray_runtime_group }}"
+    mode: "0640"
+    validate: "/usr/local/bin/xray run -test -config %s"
+  no_log: true
+  diff: false
+  notify: Restart xray
+
+- name: Ensure xray is enabled and started
+  ansible.builtin.systemd_service:
+    name: xray
+    enabled: true
+    state: started
+    daemon_reload: true

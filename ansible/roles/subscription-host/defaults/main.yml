@@ -1,0 +1,4 @@
+---
+subscription:
+  port: 8444
+  # server_name defaults to nginx_xhttp.server_name when not set

@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Generate a new per-device client across all enabled profiles and append to
+# the SOPS-encrypted secrets file. Optionally emit a shareable URI / payload.
+#
+# Usage:
+#   scripts/new-client.sh <name>              # add new client to all profiles
+#   scripts/new-client.sh --emit-uri <name>   # also print vless:// + hysteria2:// URIs
+#
+# Requires: sops, age, jq, xray (for x25519), uuidgen, openssl.
+set -euo pipefail
+
+EMIT_URI=0
+if [[ "${1:-}" == "--emit-uri" ]]; then
+  EMIT_URI=1
+  shift
+fi
+
+NAME="${1:-}"
+if [[ -z "$NAME" ]]; then
+  echo "usage: $0 [--emit-uri] <name>" >&2
+  exit 1
+fi
+
+ENV="${ENV:-prod}"
+SOPS_FILE="${SOPS_FILE:-${HOME}/.config/vpn-provision/${ENV}.secrets.sops.yaml}"
+
+if [[ ! -f "$SOPS_FILE" ]]; then
+  echo "missing $SOPS_FILE" >&2
+  exit 1
+fi
+
+UUID="$(uuidgen)"
+SHORT_ID="$(openssl rand -hex 4)"
+HY_PASSWORD="$(openssl rand -base64 24)"
+AWG_PRIV="$(awg genkey 2>/dev/null || wg genkey)"
+AWG_PUB="$(echo "$AWG_PRIV" | awg pubkey 2>/dev/null || echo "$AWG_PRIV" | wg pubkey)"
+AWG_PSK="$(awg genpsk 2>/dev/null || wg genpsk)"
+
+# Edit secrets in place. SOPS preserves encryption boundaries when called via
+# `sops set` (yaml mode).
+sops set "$SOPS_FILE" \
+  "[\"xray\"][\"clients\"][?(@.name == '${NAME}')]" \
+  "{\"name\":\"${NAME}\",\"uuid\":\"${UUID}\",\"short_id\":\"${SHORT_ID}\"}" 2>/dev/null \
+  || sops --set "[\"xray\"][\"clients\"] += [{\"name\":\"${NAME}\",\"uuid\":\"${UUID}\",\"short_id\":\"${SHORT_ID}\"}]" "$SOPS_FILE"
+
+sops --set "[\"hysteria\"][\"clients\"] += [{\"name\":\"${NAME}\",\"password\":\"${HY_PASSWORD}\"}]" "$SOPS_FILE"
+
+sops --set "[\"amneziawg_secrets\"][\"peers\"] += [{\"name\":\"${NAME}\",\"public_key\":\"${AWG_PUB}\",\"preshared_key\":\"${AWG_PSK}\"}]" "$SOPS_FILE"
+
+cat <<EOF
+created client: ${NAME}
+  xray UUID:        ${UUID}
+  xray shortId:     ${SHORT_ID}
+  hysteria pass:    (stored)
+  AWG public key:   ${AWG_PUB}
+
+The client also needs the AWG private key to configure the device:
+  AWG private:      ${AWG_PRIV}
+
+Hand the private key to the device through a secure channel (Signal, in-person
+QR, encrypted notes app). Do NOT email it. Do NOT store it after the device is
+configured — re-issue means rotate, not recover.
+
+To remove this client later: sops --set '...' to delete the matching entries
+in xray.clients / hysteria.clients / amneziawg_secrets.peers and run
+  make rotate-credentials.
+EOF
+
+if [[ "$EMIT_URI" == "1" ]]; then
+  echo
+  echo "URIs (server-side fields filled from secrets; verify against your prod.tfvars):"
+  echo "  vless://${UUID}@<SERVER_IP>:443?type=raw&security=reality&flow=xtls-rprx-vision&sni=<SNI>&pbk=<REALITY_PUBLIC_KEY>&sid=${SHORT_ID}#${NAME}"
+  echo "  hysteria2://${NAME}:${HY_PASSWORD}@<SERVER_IP>:443/?sni=<SERVER_HOSTNAME>#${NAME}"
+fi

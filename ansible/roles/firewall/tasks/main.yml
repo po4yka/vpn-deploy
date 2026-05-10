@@ -1,0 +1,18 @@
+---
+# Source: reproducible-vps-provisioning-2026 §7.
+
+- name: Render nftables config
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "nft -c -f %s"
+  notify: Reload nftables
+
+- name: Ensure nftables service is enabled and started
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: true
+    state: started

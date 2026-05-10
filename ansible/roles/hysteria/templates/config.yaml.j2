@@ -1,0 +1,35 @@
+listen: :{{ hysteria_port | default(443) }}
+
+tls:
+  cert: {{ hysteria_config_dir }}/server.fullchain.pem
+  key:  {{ hysteria_config_dir }}/server.key
+
+auth:
+  type: userpass
+  userpass:
+{% for client in hysteria.clients %}
+    {{ client.name }}: "{{ client.password }}"
+{% endfor %}
+
+# Salamander obfuscation: disabled by default; enable only if vanilla Hysteria
+# is being classified on a target network. See multi-profile-access-stack-2026
+# § "Salamander policy".
+{% if hysteria.salamander_enabled | default(false) %}
+obfs:
+  type: salamander
+  salamander:
+    password: "{{ hysteria.salamander_password }}"
+{% endif %}
+
+bandwidth:
+  up:   {{ hysteria.bandwidth_up   | default("100 mbps") }}
+  down: {{ hysteria.bandwidth_down | default("200 mbps") }}
+
+masquerade:
+  type: 404
+
+quic:
+  initStreamReceiveWindow: 8388608
+  maxStreamReceiveWindow:  8388608
+  initConnReceiveWindow:   20971520
+  maxConnReceiveWindow:    20971520

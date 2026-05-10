@@ -1,0 +1,21 @@
+---
+extends: default
+
+rules:
+  line-length:
+    max: 140
+    level: warning
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: false
+  document-start: disable
+  indentation:
+    spaces: 2
+    indent-sequences: true
+
+ignore: |
+  .terraform/
+  .venv/
+  ansible/inventory/generated.ini

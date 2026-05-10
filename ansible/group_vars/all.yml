@@ -1,0 +1,35 @@
+---
+# Tunables shared across every host. Secrets do NOT live here — they are
+# loaded at runtime from VPN_SECRETS_FILE in playbook vars_files.
+
+vpn:
+  # Toggle individual transport profiles. P0 (xray-reality) is always on.
+  enable_xray_reality: true
+  enable_nginx_xhttp: true        # P1 — direct, no CDN baseline
+  enable_hysteria: true           # P2 — UDP/443
+  enable_amneziawg: true          # P2 — device-VPN
+  enable_monitoring: true
+  enable_backup: true
+  enable_subscription_host: false  # opt-in; not in v1 default deploy
+
+# nftables policy
+allowed_ssh_cidrs: []  # populated from terraform tfvars; see render-inventory.sh
+
+# Ports
+xray_port: 443
+nginx_xhttp_port: 8443        # localhost-only; nginx fronts 443/tcp
+hysteria_port: 443
+
+# Paths
+xray_install_root: /opt/xray
+xray_config_dir: /etc/xray
+xray_log_dir: /var/log/xray
+
+hysteria_install_root: /opt/hysteria
+hysteria_config_dir: /etc/hysteria
+hysteria_log_dir: /var/log/hysteria
+
+amneziawg_config_dir: /etc/amnezia/amneziawg
+
+# Backup
+restic_repo_dir: /var/backups/vpn-restic   # local-first; remote sync is opt-in

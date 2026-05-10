@@ -1,0 +1,92 @@
+{
+  "log": {
+    "loglevel": "warning",
+    "access": "{{ xray_log_path }}/access.log",
+    "error": "{{ xray_log_path }}/error.log"
+  },
+  "inbounds": [
+    {
+      "tag": "vless-reality",
+      "listen": "0.0.0.0",
+      "port": {{ xray_port | default(443) }},
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {%- for client in xray.clients %}
+          {
+            "id": "{{ client.uuid }}",
+            "flow": "xtls-rprx-vision",
+            "email": "{{ client.name }}"
+          }{% if not loop.last %},{% endif %}
+          {%- endfor %}
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "raw",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "target": "{{ xray.target }}",
+          "xver": 0,
+          "serverNames": {{ xray.server_names | to_json }},
+          "privateKey": "{{ xray.reality_private_key }}",
+          "shortIds": [
+            {%- for client in xray.clients %}
+            "{{ client.short_id }}"{% if not loop.last %},{% endif %}
+            {%- endfor %}
+          ]
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"]
+      }
+    }{% if vpn.enable_nginx_xhttp | default(false) %},
+    {
+      "tag": "vless-xhttp-localhost",
+      "listen": "127.0.0.1",
+      "port": {{ nginx_xhttp_port | default(8443) }},
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {%- for client in xray.clients %}
+          {
+            "id": "{{ client.uuid }}",
+            "email": "{{ client.name }}-xhttp"
+          }{% if not loop.last %},{% endif %}
+          {%- endfor %}
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "none",
+        "xhttpSettings": {
+          "path": "{{ xray.xhttp_path | default('/app-sync') }}",
+          "mode": "auto"
+        }
+      }
+    }{% endif %}
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom"
+    },
+    {
+      "tag": "block",
+      "protocol": "blackhole"
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "ip": ["geoip:private"],
+        "outboundTag": "block"
+      }
+    ]
+  }
+}

@@ -1,0 +1,66 @@
+#!/usr/sbin/nft -f
+# Managed by Ansible role `firewall`. Hand edits will be overwritten.
+
+flush ruleset
+
+table inet filter {
+  chain input {
+    type filter hook input priority 0;
+    policy drop;
+
+    iif "lo" accept
+    ct state established,related accept
+    ct state invalid drop
+
+    ip protocol icmp accept
+    ip6 nexthdr ipv6-icmp accept
+
+{% if allowed_ssh_cidrs %}
+    tcp dport 22 ip saddr { {{ allowed_ssh_cidrs | select('match', '^(?!.*:).*') | list | join(", ") if allowed_ssh_cidrs else '' }} } accept
+{% set v6cidrs = allowed_ssh_cidrs | select('match', '.*:.*') | list %}
+{% if v6cidrs %}
+    tcp dport 22 ip6 saddr { {{ v6cidrs | join(", ") }} } accept
+{% endif %}
+{% endif %}
+
+    # P0/P1 transports share TCP/443
+    tcp dport 443 accept
+
+{% if vpn.enable_hysteria | default(false) %}
+    # P2 — Hysteria2 UDP
+    udp dport 443 accept
+{% endif %}
+
+{% if vpn.enable_amneziawg | default(false) %}
+    # P2 — AmneziaWG (default UDP/51820; override via group_vars if needed)
+    udp dport {{ amneziawg.listen_port | default(51820) }} accept
+{% endif %}
+
+    counter drop
+  }
+
+  chain forward {
+    type filter hook forward priority 0;
+{% if vpn.enable_amneziawg | default(false) %}
+    policy accept;
+    iifname "awg0" accept
+    oifname "awg0" accept
+{% else %}
+    policy drop;
+{% endif %}
+  }
+
+  chain output {
+    type filter hook output priority 0;
+    policy accept;
+  }
+}
+
+{% if vpn.enable_amneziawg | default(false) %}
+table inet nat {
+  chain postrouting {
+    type nat hook postrouting priority 100;
+    iifname "awg0" oifname != "awg0" masquerade
+  }
+}
+{% endif %}

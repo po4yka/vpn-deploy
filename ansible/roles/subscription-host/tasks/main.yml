@@ -1,0 +1,42 @@
+---
+# Source: subscription-delivery-plane-2026 (§1 target architecture).
+#
+# v1 scope: a separate nginx server block on a non-default port that serves
+# pre-rendered subscription payloads from /var/lib/vpn-sub/<token>. Token
+# generation, payload rendering, and revocation are operator's responsibility
+# (scripts/new-client.sh emits payload files; this role only hosts them).
+#
+# Out of scope for v1: full no-log delivery API, rate-limit middleware,
+# QR bootstrap. See docs/RUNBOOK-add-fallback.md for v2 scope.
+
+- name: Ensure nginx is present (subscription host shares it with nginx-xhttp)
+  ansible.builtin.apt:
+    name:
+      - nginx
+    state: present
+
+- name: Ensure subscription payload directory
+  ansible.builtin.file:
+    path: /var/lib/vpn-sub
+    state: directory
+    owner: root
+    group: www-data
+    mode: "0750"
+
+- name: Drop subscription site
+  ansible.builtin.template:
+    src: subscription.conf.j2
+    dest: /etc/nginx/sites-available/vpn-sub.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "nginx -t -c /etc/nginx/nginx.conf"
+  notify: Reload nginx
+
+- name: Enable subscription site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/vpn-sub.conf
+    dest: /etc/nginx/sites-enabled/vpn-sub.conf
+    state: link
+    force: true
+  notify: Reload nginx
