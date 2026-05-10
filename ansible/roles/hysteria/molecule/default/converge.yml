@@ -1,0 +1,68 @@
+---
+- name: Converge hysteria role (template-only, stub binary)
+  hosts: all
+  become: true
+  vars:
+    hysteria_install_root: /opt/hysteria
+    hysteria_config_dir: /etc/hysteria
+    hysteria_log_dir: /var/log/hysteria
+    hysteria_port: 443
+    nginx_xhttp:
+      server_name: vpn.example.test
+    hysteria:
+      version: "v2.8.2"
+      linux_amd64_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+      cert_pem: |
+        -----BEGIN CERTIFICATE-----
+        STUB_CERT_FOR_MOLECULE
+        -----END CERTIFICATE-----
+      key_pem: |
+        -----BEGIN PRIVATE KEY-----
+        STUB_KEY_FOR_MOLECULE
+        -----END PRIVATE KEY-----
+      bandwidth_up: "100 mbps"
+      bandwidth_down: "200 mbps"
+      salamander_enabled: false
+      clients:
+        - name: alice
+          password: stub-pw-1
+        - name: bob
+          password: stub-pw-2
+  pre_tasks:
+    - name: Stub hysteria binary in release dir
+      ansible.builtin.file:
+        path: "{{ hysteria_install_root }}/releases/{{ hysteria.version }}"
+        state: directory
+        mode: "0755"
+    - name: Drop stub hysteria binary
+      ansible.builtin.copy:
+        dest: "{{ hysteria_install_root }}/releases/{{ hysteria.version }}/hysteria"
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          exit 0
+    - name: Stub /usr/local/bin/hysteria
+      ansible.builtin.copy:
+        dest: /usr/local/bin/hysteria
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          exit 0
+    - name: Pre-create system user (the role itself does this; molecule pre_tasks short-circuit get_url)
+      ansible.builtin.user:
+        name: hysteria
+        system: true
+        shell: /usr/sbin/nologin
+        home: /var/lib/hysteria
+        create_home: true
+  tasks:
+    - name: Apply role with download skipped via stub binary
+      ansible.builtin.include_role:
+        name: hysteria
+      vars:
+        hysteria_arch: "amd64"
+        hysteria_sha256: "0000000000000000000000000000000000000000000000000000000000000000"

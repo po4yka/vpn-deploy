@@ -52,10 +52,13 @@ paths = [
     '''docs/.*\.md''',
     '''README\.md''',
     '''.*\.example\..*''',
+    '''ansible/roles/.*/molecule/.*''',
 ]
 regexes = [
     '''REPLACE_WITH_[A-Z_]+''',
     '''<[A-Z_]+>''',
     '''AAAA_REPLACE_WITH_PUBLIC_KEY''',
     '''age-keygen''',
+    '''STUB_[A-Z_]+''',
+    '''MOLECULE_[A-Z_]+''',
 ]

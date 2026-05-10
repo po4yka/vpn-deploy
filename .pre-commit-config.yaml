@@ -35,3 +35,25 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: ['--maxkb=500']
+
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.10.0
+    hooks:
+      - id: shellcheck
+        args: ['-s', 'bash', '-S', 'warning']
+
+  - repo: local
+    hooks:
+      - id: secrets-coverage
+        name: secrets-coverage (template vars must be in example secrets)
+        entry: python3 scripts/check-secrets-coverage.py
+        language: system
+        pass_filenames: false
+        files: ^(secrets/prod\.secrets\.example\.yaml|ansible/.*\.j2)$
+
+      - id: templates-render
+        name: templates-render (Jinja syntax + JSON / nginx structural validity)
+        entry: python3 scripts/check-templates-render.py
+        language: system
+        pass_filenames: false
+        files: ^(ansible/.*\.j2|secrets/prod\.secrets\.example\.yaml|ansible/group_vars/.*\.yml)$

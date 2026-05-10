@@ -1,0 +1,43 @@
+---
+- name: Verify nginx-xhttp role
+  hosts: all
+  become: true
+  tasks:
+    - name: nginx -t
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: Site is enabled
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-enabled/vpn-xhttp.conf
+      register: site
+      failed_when: not site.stat.exists or not site.stat.islnk
+
+    - name: TLS material present with safe perms
+      ansible.builtin.stat:
+        path: /etc/nginx/tls/vpn.example.test.key
+      register: keyf
+      failed_when: keyf.stat.mode != "0600"
+
+    - name: Default site is disabled
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-enabled/default
+      register: default_site
+      failed_when: default_site.stat.exists
+
+    - name: Site config references the XHTTP path
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q '/app-sync/' /etc/nginx/sites-available/vpn-xhttp.conf
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Site has no Cloudflare-specific real_ip directives (RU baseline)
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ! grep -q 'CF-Connecting-IP\|real_ip_header' /etc/nginx/sites-available/vpn-xhttp.conf
+        executable: /bin/bash
+      changed_when: false

@@ -1,0 +1,37 @@
+---
+- name: Converge subscription-host role
+  hosts: all
+  become: true
+  vars:
+    nginx_xhttp:
+      server_name: sub.example.test
+    subscription:
+      port: 8444
+      rate_limit: "5r/m"
+      rate_burst: 3
+      revoked_tokens:
+        - "deadbeefdeadbeefdeadbeef"
+  pre_tasks:
+    - name: Install nginx + openssl
+      ansible.builtin.apt:
+        name: [nginx, openssl]
+        state: present
+        update_cache: true
+    - name: Ensure TLS material directory
+      ansible.builtin.file:
+        path: /etc/nginx/tls
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+    - name: Generate a self-signed pair so nginx -t passes
+      ansible.builtin.command:
+        cmd: |
+          openssl req -x509 -newkey rsa:2048 -nodes
+            -keyout /etc/nginx/tls/sub.example.test.key
+            -out /etc/nginx/tls/sub.example.test.fullchain.pem
+            -subj /CN=sub.example.test
+            -days 1
+        creates: /etc/nginx/tls/sub.example.test.fullchain.pem
+  roles:
+    - role: subscription-host

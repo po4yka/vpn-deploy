@@ -1,0 +1,11 @@
+---
+- name: Converge monitoring role
+  hosts: all
+  become: true
+  vars:
+    xray_log_dir: /var/log/xray
+    vpn:
+      enable_xray_reality: true
+      enable_nginx_xhttp: false
+  roles:
+    - role: monitoring

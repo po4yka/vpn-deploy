@@ -1,0 +1,31 @@
+---
+- name: Verify backup role
+  hosts: all
+  become: true
+  tasks:
+    - name: restic installed
+      ansible.builtin.command:
+        cmd: restic version
+      register: rv
+      changed_when: false
+
+    - name: restic repo initialized
+      ansible.builtin.stat:
+        path: /var/backups/vpn-restic/config
+      register: rrep
+      failed_when: not rrep.stat.exists
+
+    - name: backup script renders without remote-sync block when disabled
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ! grep -q 'rclone sync' /usr/local/sbin/vpn-backup.sh
+        executable: /bin/bash
+      changed_when: false
+
+    - name: timer enabled
+      ansible.builtin.command:
+        cmd: systemctl is-enabled vpn-backup.timer
+      register: t
+      changed_when: false
+      failed_when: t.stdout != "enabled"

@@ -30,6 +30,7 @@ STATE[alerts_hour_started]="${STATE[alerts_hour_started]:-$(date +%s)}"
 
 probe_results=()
 probe_failures=()
+probe_failure_count=0
 
 probe() {
   local name="$1"; shift
@@ -38,6 +39,7 @@ probe() {
   else
     probe_results+=("FAIL  $name")
     probe_failures+=("$name")
+    probe_failure_count=$(( probe_failure_count + 1 ))
   fi
 }
 
@@ -71,7 +73,7 @@ probe "disk root <90%" \
 
 now=$(date +%s)
 
-if [[ ${#probe_failures[@]} -gt 0 ]]; then
+if (( probe_failure_count > 0 )); then
   STATE[consecutive_fails]=$(( STATE[consecutive_fails] + 1 ))
 else
   STATE[consecutive_fails]=0

@@ -1,0 +1,40 @@
+---
+- name: Verify hysteria role
+  hosts: all
+  become: true
+  tasks:
+    - name: config.yaml exists
+      ansible.builtin.stat:
+        path: /etc/hysteria/config.yaml
+      register: cfg
+      failed_when: not cfg.stat.exists
+
+    - name: config.yaml owned by root:hysteria 0640
+      ansible.builtin.assert:
+        that:
+          - cfg.stat.pw_name == "root"
+          - cfg.stat.gr_name == "hysteria"
+          - cfg.stat.mode == "0640"
+
+    - name: systemd unit installed
+      ansible.builtin.stat:
+        path: /etc/systemd/system/hysteria-server.service
+      register: unit
+      failed_when: not unit.stat.exists
+
+    - name: config references both clients
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q 'alice:' /etc/hysteria/config.yaml
+          grep -q 'bob:' /etc/hysteria/config.yaml
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Salamander disabled-by-default not in config
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ! grep -q 'type: salamander' /etc/hysteria/config.yaml
+        executable: /bin/bash
+      changed_when: false

@@ -37,7 +37,8 @@ Switch via `make PROVIDER=upcloud …`.
    baseline; nginx-xhttp role is direct-only by default.
 4. `docs/SECRETS.md` — SOPS+age model, age-key recovery, rotation.
 5. `docs/AGE-RECOVERY.md` — Shamir-split the age key for k-of-n recovery.
-6. `docs/RUNBOOK-deploy.md` — full deploy procedure.
+6. `docs/TESTING.md` — coverage matrix and what's intentionally not tested.
+7. `docs/RUNBOOK-deploy.md` — full deploy procedure.
 
 Operational runbooks: `docs/RUNBOOK-{rotate,rollback,incident,restore,add-fallback}.md`.
 

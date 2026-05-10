@@ -1,0 +1,37 @@
+---
+- name: Verify subscription-host role
+  hosts: all
+  become: true
+  tasks:
+    - name: nginx -t
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: Site is enabled
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-enabled/vpn-sub.conf
+      register: site
+      failed_when: not site.stat.exists or not site.stat.islnk
+
+    - name: revoked-tokens map dropped
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q 'deadbeefdeadbeefdeadbeef.*1' /etc/nginx/conf.d/vpn-sub-revoked.map
+        executable: /bin/bash
+      changed_when: false
+
+    - name: rate-limit zone defined
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q 'limit_req_zone .* zone=vpn_sub_per_ip' /etc/nginx/conf.d/vpn-sub-ratelimit.conf
+        executable: /bin/bash
+      changed_when: false
+
+    - name: payload directory exists with safe perms
+      ansible.builtin.stat:
+        path: /var/lib/vpn-sub
+      register: payload_dir
+      failed_when: payload_dir.stat.mode != "0750"
