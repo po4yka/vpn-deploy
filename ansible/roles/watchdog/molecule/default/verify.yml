@@ -20,6 +20,7 @@
         cmd: |
           set -o pipefail
           grep -q 'NTFY_TOPIC=molecule-stub-topic' /etc/vpn-watchdog.env
+          ! grep -Fq 'HOSTNAME=$(hostname)' /etc/vpn-watchdog.env
         executable: /bin/bash
       changed_when: false
 

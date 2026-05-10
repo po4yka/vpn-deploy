@@ -3,10 +3,20 @@
   hosts: all
   become: true
   tasks:
+    - name: Collect service facts
+      ansible.builtin.service_facts:
+
     - name: nftables installed
       ansible.builtin.command:
         cmd: nft --version
       changed_when: false
+
+    - name: systemd-resolved drop-in present when service exists
+      ansible.builtin.stat:
+        path: /etc/systemd/resolved.conf.d/no-stub.conf
+      register: resolved_dropin
+      failed_when: not resolved_dropin.stat.exists or not resolved_dropin.stat.isreg
+      when: "'systemd-resolved.service' in ansible_facts.services"
 
     - name: SSH hardening drop-in present
       ansible.builtin.stat:
