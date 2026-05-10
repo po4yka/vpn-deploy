@@ -7,16 +7,17 @@ on:
   push:
     branches: [main]
 
-# Permissions follow the official OSSF Scorecard installation template:
-# https://github.com/ossf/scorecard-action#installation
-# `actions: read` is required for the Pinned-Dependencies + Token-Permissions
-# checks to inspect workflow YAML; without it, ListCommits' graphql calls
-# fail with "Resource not accessible by integration".
+# Permissions follow the official OSSF Scorecard template +
+# workflow-restrictions:
+#   https://github.com/ossf/scorecard-action#installation
+#   https://github.com/ossf/scorecard-action#workflow-restrictions
+# Top-level MUST be read-only — Scorecard's publishing webapp rejects
+# results from workflows that have any global write permission
+# ("workflow verification failed: global perm is set to write").
+# Write scopes are at job level only.
 permissions:
   contents: read
   actions: read
-  security-events: write
-  id-token: write
 
 jobs:
   analysis:
