@@ -62,3 +62,6 @@ Thumbs.db
 
 # pre-commit
 .pre-commit-cache/
+
+# Claude Code local state
+.claude/
