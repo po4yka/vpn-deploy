@@ -2,12 +2,12 @@
 # implementation pattern; outputs must match the UpCloud module.
 
 terraform {
-  required_version = ">= 1.13"
+  required_version = ">= 1.15"
 
   required_providers {
     vultr = {
       source  = "vultr/vultr"
-      version = "~> 2.21"
+      version = "~> 2.31"
     }
   }
 }

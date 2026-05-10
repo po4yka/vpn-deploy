@@ -15,7 +15,7 @@ jobs:
     name: gitleaks
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Run gitleaks with repo rules
@@ -34,11 +34,11 @@ jobs:
       matrix:
         provider: [upcloud, hetzner, vultr]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: "1.13.0"
+          terraform_version: "1.15.2"
 
       - name: terraform fmt -check
         working-directory: terraform/providers/${{ matrix.provider }}
@@ -56,11 +56,11 @@ jobs:
     name: cloud-init schema
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: "1.13.0"
+          terraform_version: "1.15.2"
 
       - name: Install cloud-init
         run: |
@@ -92,9 +92,9 @@ jobs:
     name: ansible-lint + syntax-check
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -134,9 +134,9 @@ jobs:
           - backup
           - subscription-host
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -156,7 +156,7 @@ jobs:
     name: shellcheck
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run shellcheck on every shell script
         run: |
           sudo apt-get update
@@ -167,8 +167,8 @@ jobs:
     name: secrets-coverage
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install deps
@@ -180,8 +180,8 @@ jobs:
     name: templates-render
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install deps
@@ -196,11 +196,11 @@ jobs:
     name: yamllint
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install yamllint
-        run: pip install yamllint==1.35.1
+        run: pip install yamllint==1.38.0
       - name: yamllint
         run: yamllint -c .yamllint.yml .
