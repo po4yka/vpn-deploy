@@ -74,12 +74,14 @@
           #!/bin/sh
           exit 0
 
-  tasks:
-    # Render templates only; skip download/unarchive tasks.
-    - name: Run xray role with download skipped
-      ansible.builtin.include_role:
-        name: xray
+  # Use `roles:` (static binding) instead of `include_role` so the role's
+  # handlers (Restart xray, Reload systemd) register with the play and
+  # `notify:` from the role tasks resolves correctly.
+  roles:
+    - role: xray
       vars:
-        # Force the get_url task to find the file already there
+        # Force the role's get_url checksum lookup to find an
+        # already-staged binary at the pinned release path; the
+        # stat-then-skip pattern in tasks/main.yml handles the rest.
         xray_arch: "64"
         xray_sha256: "0000000000000000000000000000000000000000000000000000000000000000"

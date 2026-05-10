@@ -59,10 +59,11 @@
         shell: /usr/sbin/nologin
         home: /var/lib/hysteria
         create_home: true
-  tasks:
-    - name: Apply role with download skipped via stub binary
-      ansible.builtin.include_role:
-        name: hysteria
+  # Use `roles:` (static binding) so the role's handlers (Restart
+  # hysteria, Reload systemd) register with the play and notify
+  # resolves correctly.
+  roles:
+    - role: hysteria
       vars:
         hysteria_arch: "amd64"
         hysteria_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
