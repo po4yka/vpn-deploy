@@ -7,8 +7,7 @@
 
 Reproducible VPN deployment automation for the multi-profile access stack
 (`P0` VLESS+REALITY+Vision → `P1` nginx+XHTTP direct → `P2` Hysteria2 +
-AmneziaWG). Built around the model from
-`reproducible-vps-provisioning-2026`: Terraform owns cloud resources,
+AmneziaWG). Layered architecture: Terraform owns cloud resources,
 cloud-init does first-boot bootstrap, Ansible owns runtime state, and
 secrets live outside the repo (SOPS + age).
 
