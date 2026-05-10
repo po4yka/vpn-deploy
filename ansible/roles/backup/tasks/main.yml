@@ -1,9 +1,7 @@
 ---
-# Source: vpn-disaster-recovery-restore-2026 §4.
-#
 # Local-first restic repository, with optional remote sync via rclone.
-# Remote sync is gated by `backup.remote.enabled`; when off, this role is
-# identical to v1.0.
+# Remote sync is gated by `backup.remote.enabled`; when off, this role
+# only writes a local repository under `restic_repo_dir`.
 
 - name: Install restic
   ansible.builtin.apt:

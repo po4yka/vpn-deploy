@@ -1,8 +1,6 @@
 ---
 # P2 transport: Hysteria2 over QUIC/HTTP3 on UDP/443. Pinned release with
 # symlink rollback, validate-before-restart pattern.
-#
-# Source: hysteria2-tuic concept page.
 
 - name: Create hysteria system user
   ansible.builtin.user:

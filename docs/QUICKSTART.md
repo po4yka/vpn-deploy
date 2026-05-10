@@ -95,7 +95,7 @@ $EDITOR ~/.config/vpn-provision/prod.secrets.yaml
 ```
 
 Fill: Xray version + sha256 (from the GitHub release page), REALITY keypair
-from step 2c, target+server_names (see `reality-target-selection-2026`),
+from step 2c, target+server_names (validate with `make validate-target`),
 nginx_xhttp cert/key (your public CA cert for `vpn.example.com`), Hysteria
 version + sha256, geodata release URLs + sha256 values, AmneziaWG source
 pins (`amneziawg_go_version`, `amneziawg_tools_version`), AmneziaWG H1–H4

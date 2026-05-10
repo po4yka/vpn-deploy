@@ -1,5 +1,6 @@
 ---
-# Source: reproducible-vps-provisioning-2026 §6 + ssh-hardening-censorship-context.
+# Baseline OS hardening: distro packages, sshd hardening, sysctl tuning,
+# timesync. Runs on every VPS as the first role in site.yml.
 
 - name: Install baseline packages
   ansible.builtin.apt:

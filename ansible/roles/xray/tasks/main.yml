@@ -1,5 +1,5 @@
 ---
-# Source: reproducible-vps-provisioning-2026 §8 + server-xray-vless concept page.
+# P0 primary transport: Xray with VLESS+REALITY+XTLS-Vision.
 # Pinning, symlink rollback, validate-before-restart, .prev backup.
 
 - name: Create xray system user

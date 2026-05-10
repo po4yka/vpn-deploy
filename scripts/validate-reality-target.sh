@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Pre-deploy validator for the REALITY target host. Runs through the
-# checklist from `reality-target-selection-2026 § Scoring rubric` and exits
-# non-zero if the target fails any hard check.
+# Pre-deploy validator for the REALITY target host. Runs a 7-step check
+# (TLS 1.3 handshake, ALPN h2, certificate SAN coverage, plausible
+# public CA, real HTTP body, Chrome-uTLS compatibility, anti-template
+# heuristic) and exits non-zero on any hard failure.
 #
 # Usage:
 #   scripts/validate-reality-target.sh                # reads from secrets

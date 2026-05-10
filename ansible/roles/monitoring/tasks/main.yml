@@ -1,6 +1,4 @@
 ---
-# Source: vpn-infrastructure-monitoring concept page.
-#
 # Local-first monitoring: node_exporter on a private port (firewall-restricted)
 # and a small set of journald log rules. Remote scrape and alert routing are
 # operator's choice and are not configured here.

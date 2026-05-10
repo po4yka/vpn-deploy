@@ -12,20 +12,16 @@ CDN by default.
 
 ## Context
 
-Earlier wiki guidance — including parts of `multi-profile-access-stack-2026`
-and `server-xray-vless` — used Cloudflare CDN as a P1 fallback baseline,
-with hardening recipes for Full (strict) TLS, Origin CA, `CF-Connecting-IP`
-real-IP restoration, and Authenticated Origin Pulls. That guidance is
-**still technically correct** but **no longer the right default for the
-Russian threat model**.
-
-`cdn-tunneling-closure-april-2026` and `cloudflare-russian-pop-tspu-blocking`
-document the April–May 2026 status:
+A Cloudflare-fronted P1 fallback used to be a sensible recipe (Full
+strict TLS, Origin CA, `CF-Connecting-IP` real-IP restoration,
+Authenticated Origin Pulls). That recipe is **technically correct** but
+**no longer the right default for the Russian threat model** as of
+April–May 2026:
 
 | CDN | Status into RU |
 |---|---|
 | Cloudflare | Reachable, but via Russian PoPs with TSPU enabled. XHTTP passes but the 16 KB curtain is active. Not an independent path — a DPI-shaped one. |
-| VK CDN | POST/PUT/PATCH closed for non-legal-entity accounts; XHTTP packet-up and gRPC broken. A verified юрлицо account directly attributes the channel operator under `corporate-vpn-whitelist-rkn`. |
+| VK CDN | POST/PUT/PATCH closed for non-legal-entity accounts; XHTTP packet-up and gRPC broken. A verified юрлицо account directly attributes the channel operator under the corporate-VPN registry. |
 | Yandex CDN | Whitelist mode removed; anonymous endpoints gone. |
 | Ngenix / Beeline / CDNvideo | Functional, candidates for closure within weeks. |
 | Akamai / CDN77 / Fastly (GET-only) | Work but expensive or narrow. |
@@ -53,10 +49,12 @@ CDN is a **tactical** layer, not a baseline. Reach for it when:
 - You explicitly want browser-shaped traffic for a small, monitored
   deployment, and you're comfortable losing it within weeks.
 
-In those cases, see `multi-profile-access-stack-2026` § "Fallback A" for
-the full Cloudflare hardening recipe (Full strict, Origin CA, AOP, real-IP
-restoration). Treat that recipe as a **separate role** to add later, not a
-flag flip on `nginx-xhttp`.
+In those cases, the Cloudflare hardening recipe is well-known: Full
+strict TLS mode, Origin CA / public CA, `CF-Connecting-IP` real-IP
+restoration so rate-limit and log logic see visitor IPs, origin firewall
+restricting 443 to the Cloudflare prefixes, optional Tunnel/AOP/secret
+header. Treat that as a **separate role** to add later, not a flag flip
+on `nginx-xhttp`.
 
 ## When NOT to use CDN under any circumstances
 
@@ -64,7 +62,8 @@ flag flip on `nginx-xhttp`.
   operator and is closing for non-corporate accounts.
 - **Cloudflare as the *only* path** — single point of policy failure.
 - **As a "whitelist bypass"** — CDN reachability is not whitelist
-  reachability; that's a different layer (P3 in the hub model).
+  reachability; that's a different layer (P3 — operator-judged, not
+  in this repo's automation scope).
 
 ## How this is enforced
 

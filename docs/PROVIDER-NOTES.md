@@ -24,7 +24,7 @@ UpCloud is the primary provider in v1. Resource shape:
 - `pl-waw1` — Warsaw
 
 Picking a zone is a routing-quality decision, not a censorship-evasion
-one. See `multi-provider-vpn-fleet-2026 § "Region strategy"` for the model.
+one. Pick the zone closest to your client cohort's egress.
 
 ### Storage template UUIDs
 
@@ -46,14 +46,6 @@ export UPCLOUD_PASSWORD='…'
 
 Use a sub-account with only the rights this stack needs. Never bake
 credentials into `*.tfvars` — the provider reads them from env.
-
-### Existing live UpCloud deployment in the org
-
-There is a documented MTG (MTProto) node on UpCloud `fi-hel1` at
-`~/GitRep/censorship-bypass/ops/live-infra/server-mtg-upcloud-hel1.md`.
-That note covers an unrelated workload (Telegram MTProto, not VLESS), but
-the UpCloud-side patterns — naming, zone choice, networking, hypervisor
-firewall — are reusable.
 
 ### Limits to be aware of
 
@@ -83,8 +75,8 @@ Will use:
 - `vultr_instance`, `vultr_ssh_key`, `vultr_firewall_group`,
   `vultr_firewall_rule`.
 - Wider region coverage than UpCloud / Hetzner.
-- IP reputation is more variable; lean on `multi-provider-vpn-fleet-2026
-  § "Burned ASN detection"` rules when picking regions.
+- IP reputation is more variable; rotate regions when burn-check shows
+  a region's prefix is RKN-blocked.
 
 ## What every provider stub must export for inventory compatibility
 
