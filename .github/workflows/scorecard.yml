@@ -7,8 +7,14 @@ on:
   push:
     branches: [main]
 
+# Permissions follow the official OSSF Scorecard installation template:
+# https://github.com/ossf/scorecard-action#installation
+# `actions: read` is required for the Pinned-Dependencies + Token-Permissions
+# checks to inspect workflow YAML; without it, ListCommits' graphql calls
+# fail with "Resource not accessible by integration".
 permissions:
   contents: read
+  actions: read
   security-events: write
   id-token: write
 
@@ -16,6 +22,11 @@ jobs:
   analysis:
     name: scorecard analysis
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+      id-token: write
     steps:
       - uses: actions/checkout@v6
         with:
@@ -27,6 +38,9 @@ jobs:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
+          # Optional: set SCORECARD_TOKEN for richer checks (BranchProtection,
+          # Webhooks). Falls back to GITHUB_TOKEN when absent.
+          repo_token: ${{ secrets.SCORECARD_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Upload Scorecard results to code scanning
         uses: github/codeql-action/upload-sarif@v4
