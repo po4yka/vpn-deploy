@@ -35,13 +35,13 @@ body:
       required: true
 
   - type: textarea
-    id: wiki-refs
+    id: references
     attributes:
-      label: Wiki / synthesis references
+      label: References
       description: |
-        If this is grounded in a `wikis/<domain>/wiki/synthesis/*.md` page
-        in the censorship-bypass vault, link or quote it. New features
-        without grounding tend to sit in triage.
+        Links to upstream docs, RFCs, release notes, or threat-model
+        analysis that justify this proposal. New features without
+        grounding tend to sit in triage.
 
   - type: textarea
     id: testing

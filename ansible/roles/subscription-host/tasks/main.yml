@@ -1,7 +1,5 @@
 ---
-# Source: subscription-delivery-plane-2026 §11 (revocation), §9 (rate limit).
-#
-# v1.2 scope: separate nginx server block, payload files at
+# Subscription delivery: separate nginx server block, payload files at
 # /var/lib/vpn-sub/<token>, plus
 #   * revocation list — revoked tokens get HTTP 410 Gone instead of the file
 #   * per-IP rate limiting (nginx limit_req)

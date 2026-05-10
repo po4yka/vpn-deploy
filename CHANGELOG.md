@@ -13,10 +13,10 @@ Initial release tracked by release-please. Repo state at this version:
   Hetzner/Vultr stubs, P0+P1+P2 transports, SOPS+age secrets, local TF state).
 - v1.1 — watchdog role, multi-host inventory, encrypted state backups,
   Shamir-split age recovery, molecule for baseline/firewall/xray.
-- v1.2 — A–I improvements: validate-reality-target.sh, smoke-test.yml,
-  multi-host emit-singbox, restic remote sync, active-probing tuning,
-  geodata role, naive role, blue-green orchestrator, subscription-plane
-  v2 (revocation + rate limit).
+- v1.2 — research-grounded improvements: validate-reality-target.sh,
+  smoke-test.yml, multi-host emit-singbox, restic remote sync,
+  active-probing tuning, geodata role, naive role, blue-green
+  orchestrator, subscription-plane v2 (revocation + rate limit).
 - v1.3 — comprehensive test coverage: molecule for 9 of 12 roles,
   secrets-coverage and templates-render Python validators, shellcheck in
   CI, docs/TESTING.md.

@@ -1,5 +1,7 @@
 ---
-# Source: reproducible-vps-provisioning-2026 §7.
+# OS-level firewall: declarative nftables, validate-before-reload.
+# Hypervisor firewall (provider-specific) is the outer layer; this is
+# the inner layer co-located with the workload.
 
 - name: Render nftables config
   ansible.builtin.template:

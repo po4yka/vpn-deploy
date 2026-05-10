@@ -59,7 +59,7 @@ matrix above before a human merges.
 | Terraform providers | yes | `terraform/providers/*/versions.tf` + `.terraform.lock.hcl` | weekly per provider directory |
 | Python tooling | yes | `requirements.txt` | weekly, grouped (ansible-core / ansible-lint / molecule / yamllint / jmespath) |
 | Ansible Galaxy collections | **no** | exact versions in `requirements.yml` | manual quarterly review (see below) |
-| Xray / Hysteria binaries | n/a (runtime only) | `secrets/prod.secrets.example.yaml` schema documents version + sha256 fields | operator decides per release; see `docs/RUNBOOK-rotate.md` and `xray-core-2026-transport-updates` synthesis |
+| Xray / Hysteria binaries | n/a (runtime only) | `secrets/prod.secrets.example.yaml` schema documents version + sha256 fields | operator decides per release; see `docs/RUNBOOK-rotate.md` |
 | geodata (geosite/geoip) | n/a | concrete URLs + sha256 values in the deployed vars file | daily systemd timer on the VPS via `geodata` role |
 
 ### Manual quarterly Galaxy collection refresh

@@ -1,8 +1,6 @@
 ---
 # NaiveProxy as an alternative P1 transport. Mutually exclusive with
 # nginx-xhttp on the same host (both want 443/tcp). Off by default.
-#
-# Source: naiveproxy-protocol-overview + naiveproxy-russia-field-status-april-2026.
 
 naive:
   # Build the Caddy + forwardproxy@naive binary on first install. Subsequent

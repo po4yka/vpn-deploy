@@ -1,6 +1,5 @@
 ---
 # P2 device-VPN transport: AmneziaWG userspace install on Debian 13 / Ubuntu 24.04.
-# Source: amneziawg-userspace-debian-install + awg-systemd-split-tunnel-pattern.
 #
 # Userspace path is preferred for portability across kernels. The kernel module
 # variant ships separately and is not assumed here.

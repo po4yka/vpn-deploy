@@ -1,8 +1,6 @@
 # Architecture
 
-This repo materializes the multi-profile access stack from the
-`vpn-deployment-hub` MOC in the censorship-bypass vault. The on-disk shape
-mirrors the four-tier model:
+This repo implements a four-tier multi-profile access stack:
 
 ```
 P0 Primary       VLESS + REALITY + XTLS-Vision over RAW/TCP/443
@@ -51,9 +49,9 @@ Direct-only cohorts with REALITY disabled can set `nginx_xhttp_public_port` to
 
 ## Disposable nodes
 
-Every node is replaceable. The synthesis-page mantra applies: when an IP
-burns or a config drifts, do not hand-repair a snowflake server — recreate
-from `git + secrets + Terraform plan`. The state lives in two places:
+Every node is replaceable. When an IP burns or a config drifts, do not
+hand-repair a snowflake server — recreate from `git + secrets +
+Terraform plan`. The state lives in two places:
 
 1. The encrypted secrets file at `~/.config/vpn-provision/`.
 2. The Terraform state file (local; back it up out-of-band).
@@ -79,22 +77,10 @@ provider-specific outputs (`server_ipv4`, `server_ipv6`, `admin_user`,
 
 ## What is intentionally NOT here
 
-- Multi-region fleet automation (Tier 1+ from `multi-provider-vpn-fleet-2026`).
-  v1 is single-VPS; second-VPS guidance is in `RUNBOOK-add-fallback.md`.
+- Multi-region fleet automation. v1 is single-VPS; second-VPS guidance
+  is in `RUNBOOK-add-fallback.md`.
 - Subscription delivery API with revocation and rate-limit middleware.
   v1 ships only `subscription-host` as a static-payload nginx vhost.
 - P3 reachability layer automation. By design — the reachability layer is
   network-specific and operator-judged, not deterministically deployable.
 - molecule / per-role tests. v2.
-
-## Source-of-truth references
-
-The wiki pages this repo derives from:
-
-- `wikis/infrastructure-operations/wiki/synthesis/reproducible-vps-provisioning-2026.md` — primary
-- `wikis/infrastructure-operations/wiki/mocs/vpn-deployment-hub.md` — phase model
-- `wikis/infrastructure-operations/wiki/synthesis/multi-profile-access-stack-2026.md` — P0/P1/P2 split
-- `wikis/transport-protocols/wiki/synthesis/vless-reality-xtls-vision-production-baseline-2026.md` — REALITY hygiene
-- `wikis/transport-protocols/wiki/concepts/cdn-tunneling-closure-april-2026.md` — CDN status
-- `wikis/infrastructure-operations/wiki/synthesis/vpn-credential-lifecycle-2026.md` — rotation model
-- `wikis/infrastructure-operations/wiki/synthesis/vpn-disaster-recovery-restore-2026.md` — restore model

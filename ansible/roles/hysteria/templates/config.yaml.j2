@@ -11,9 +11,10 @@ auth:
     {{ client.name }}: "{{ client.password }}"
 {% endfor %}
 
-# Salamander obfuscation: disabled by default; enable only if vanilla Hysteria
-# is being classified on a target network. See multi-profile-access-stack-2026
-# § "Salamander policy".
+# Salamander obfuscation: disabled by default. Enable only if vanilla
+# Hysteria is being classified on the target network — turning it on
+# trades a vanilla-H2 fingerprint for a high-entropy UDP fingerprint,
+# which can itself be a signal.
 {% if hysteria.salamander_enabled | default(false) %}
 obfs:
   type: salamander

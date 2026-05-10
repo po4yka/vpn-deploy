@@ -1,8 +1,7 @@
 # Runbook — disaster recovery / restore
 
-Source-of-truth: `vpn-disaster-recovery-restore-2026 § 7` ("Restore in
-15-30 minutes"). This runbook adapts that procedure to the actual code in
-this repo.
+The architecture targets **15–30 minute restore** from a clean operator
+workstation back to a fully functional VPN node. Two paths.
 
 ## What you need
 
@@ -89,9 +88,9 @@ make verify
 make clean
 ```
 
-The synthesis page is explicit: "do not hand-repair a snowflake server."
-Path A is the default. Path B exists for the "I need to be live in 15
-minutes and have a known-good restic snapshot" case.
+Do not hand-repair a snowflake server. Path A is the default. Path B
+exists for the "I need to be live in 15 minutes and have a known-good
+restic snapshot" case.
 
 ## Backup verification (recurring task)
 
@@ -119,8 +118,6 @@ remote target was breached, or the password leaked):
 3. Re-init the repo with a new password (see `RUNBOOK-rotate.md` § 4).
 
 ## RTO / RPO targets
-
-From the synthesis page:
 
 - **RPO** (data loss tolerance): up to 24 hours (daily restic snapshot).
   Lower if you sync remote more often.

@@ -1,5 +1,7 @@
 ---
-# Source: xray-core-2026-transport-updates (v26.4.25 #5992 — geodata hot-reload).
+# Pinned geodata refresher. Hot-reloads Xray via SIGHUP on Xray v26.4.x+;
+# older versions silently no-op the reload (operators on older Xray
+# should disable this role).
 
 - name: Pre-flight - geodata sources are pinned
   ansible.builtin.assert:

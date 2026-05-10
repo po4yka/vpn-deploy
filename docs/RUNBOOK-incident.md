@@ -9,7 +9,7 @@ symptom; cross-reference the linked runbook for the recovery procedure.
 |---|---|---|
 | Single client URI leaked / device lost | Per-device | `RUNBOOK-rotate.md` § 1 |
 | REALITY private key leaked | Server-wide | `RUNBOOK-rotate.md` § 2, then reissue every client |
-| Subscription URL leaked publicly | Token | rotate subscription tokens; see `subscription-delivery-plane-2026 § 17` |
+| Subscription URL leaked publicly | Token | add the leaked token to `subscription.revoked_tokens`, run `make deploy`; reissue via `scripts/new-client.sh` |
 | TLS handshake to VPS fails from many networks at once | IP burned | run `make burn-check` to confirm; then blue-green to new VPS, different ASN if possible |
 | Slow / lossy on one network only, fine elsewhere | Routing / ISP-specific | first try `Hysteria2` fallback; if persistent, blue-green to different region |
 | `xray run -test -config` fails after deploy | Config bug | `RUNBOOK-rollback.md` § 1 (config rollback, automatic via handler rescue) |
@@ -19,8 +19,8 @@ symptom; cross-reference the linked runbook for the recovery procedure.
 | Lost SOPS age private key | Operator | see § "Lost age key" below; if you set up Shamir split (`docs/AGE-RECOVERY.md`), reconstruct from k shares first |
 | Lost Terraform state file | Operator | see § "State loss" below |
 | 3x-ui / Marzban / Remnawave panel exposed | Architecture deviation | this stack has no panel by design; if you added one, take it offline NOW |
-| Suspected RKN / TSPU active probing | Threat-model | review `vless-graylist-active-probing-defense`; check REALITY target hygiene |
-| Mobile network whitelist rolled out for the operator | Threat-model | this is P3 — see `vpn-deployment-hub` § "Phase 3" and the wiki's `whitelist-aware-transport-system-2026` |
+| Suspected RKN / TSPU active probing | Threat-model | check REALITY target hygiene; rerun `make validate-target`; consider rotating SNI target |
+| Mobile network whitelist rolled out for the operator | Threat-model | P3 reachability — automation can't help; switch network (roaming, fixed broadband) or stand up an in-country relay |
 
 ## Lost SSH access
 

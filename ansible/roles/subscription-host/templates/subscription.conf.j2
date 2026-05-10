@@ -31,8 +31,7 @@ server {
         default_type application/json;
         try_files $uri =404;
 
-        # No access logging on the subscription host (privacy invariant from
-        # subscription-delivery-plane-2026 §7).
+        # No access logging on the subscription host — privacy invariant.
         access_log off;
     }
 

@@ -1,7 +1,7 @@
 # Runbook — add a fallback VPS
 
-v1 ships single-VPS. For a true multi-VPS / multi-ASN posture (Tier 1+
-from `multi-provider-vpn-fleet-2026`), here's how to extend.
+v1 ships single-VPS. For a multi-VPS / multi-ASN posture, here's how to
+extend.
 
 ## Two patterns
 
@@ -65,9 +65,10 @@ client cohorts:
   one. If cohort A's path degrades, the operator switches that cohort's
   subscription URL to a different VPS.
 
-This is the minimum useful cohort split. The full model
-(`multi-provider-vpn-fleet-2026`) covers blast-radius caps and migration
-playbooks.
+This is the minimum useful cohort split. A full fleet model would also
+introduce blast-radius caps (per-cohort credential isolation, no shared
+SNI target), automated migration playbooks, and ASN burn detection —
+all out of scope for v1.
 
 ## Pattern 3 — separate roles per VPS
 
@@ -122,8 +123,9 @@ The pre-shipped cohort files are:
   endpoint that can hand each device the right cohort.
 - **Health checks and failover** become explicit: clients need
   selector/urltest logic in sing-box / NekoBox to actually use the
-  fallback VPS without a manual switch. See
-  `client-profile-policy-runbooks-2026` in the wiki.
+  fallback VPS without a manual switch. `make emit-singbox CLIENT=<name>`
+  produces a JSON with a selector + urltest group covering every
+  configured host.
 
 ## What this repo intentionally does NOT automate
 
@@ -131,6 +133,5 @@ The pre-shipped cohort files are:
 - Cohort assignment / per-device subscription rendering with revocation.
 - Burned-ASN detection.
 
-Those are upstream wiki concerns. v2 may bring some of them in; for v1
-the answer is: pick a pattern above, run it twice, and treat the second
-run as deliberate operator action.
+For v1 the answer is: pick a pattern above, run it twice, and treat the
+second run as deliberate operator action.
