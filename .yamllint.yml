@@ -11,6 +11,10 @@ rules:
     min-spaces-from-content: 1
   comments-indentation: false
   document-start: disable
+  # We intentionally align values in synthesis-style YAML (mirrors the
+  # vault's prose style); the default `colons: max-spaces-after: 1` rejects
+  # that. Disable the rule entirely.
+  colons: disable
   indentation:
     spaces: 2
     indent-sequences: true

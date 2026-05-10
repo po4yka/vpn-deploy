@@ -98,7 +98,6 @@ fi
 # 2. Service status comparison — what's enabled vs what secrets say
 echo
 echo "== Service vs secrets-toggle drift =="
-declare -A want_status
 for svc_key_pair in "xray:enable_xray_reality" "nginx:enable_nginx_xhttp" "hysteria-server:enable_hysteria"; do
   svc="${svc_key_pair%:*}"
   key="${svc_key_pair#*:}"
@@ -118,7 +117,6 @@ done
 # 3. nftables config sanity — the rendered file should match the running ruleset
 echo
 echo "== nftables config staleness =="
-remote_mtime="$(ssh_cmd 'stat -c %Y /etc/nftables.conf' 2>/dev/null || echo 0)"
 remote_mtime_human="$(ssh_cmd 'stat -c %y /etc/nftables.conf' 2>/dev/null || echo unknown)"
 echo "  /etc/nftables.conf mtime: $remote_mtime_human"
 

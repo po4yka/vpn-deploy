@@ -106,11 +106,37 @@ def validate_json(text: str, label: str) -> str | None:
 
 
 def validate_nginx(text: str, label: str) -> str | None:
+    """nginx syntax check. ssl_certificate / ssl_certificate_key / listen
+    *ssl* directives reference files that don't exist on the CI runner;
+    strip them so the test exercises only the surrounding directives. The
+    real `nginx -t` against a deployed cert chain is covered by molecule
+    scenarios for nginx-xhttp and subscription-host.
+    """
     nginx = shutil.which("nginx")
     if not nginx:
-        return None  # silently skip
+        return None  # silently skip when nginx isn't available
+
+    import re as _re
+    stripped = _re.sub(
+        r"^\s*ssl_(certificate|certificate_key|trusted_certificate)\s+[^;]+;",
+        "    # ssl_certificate stripped for syntax-only check",
+        text, flags=_re.MULTILINE,
+    )
+    stripped = _re.sub(
+        r"\bssl(\s+(?:on|off))?\b",
+        "",
+        stripped,
+    )
+    # Remove `listen 443 ssl http2;` ssl/quic flags so nginx doesn't expect cert
+    stripped = _re.sub(
+        r"(\blisten\s+\S+)\s+ssl(\s+http2)?(\s+http3)?",
+        r"\1\2\3",
+        stripped,
+    )
+    # nginx 'add_header Strict-Transport-Security' on a non-ssl server is OK; leave.
+
     with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as fh:
-        fh.write("events {}\nhttp {\n" + text + "\n}\n")
+        fh.write("events {}\nhttp {\n" + stripped + "\n}\n")
         path = fh.name
     try:
         result = subprocess.run(

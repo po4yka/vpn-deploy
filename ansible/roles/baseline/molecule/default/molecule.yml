@@ -28,6 +28,8 @@ platforms:
 
 provisioner:
   name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../..
   inventory:
     host_vars:
       vpn-baseline-debian13:
@@ -36,7 +38,6 @@ provisioner:
         ansible_user: root
   config_options:
     defaults:
-      stdout_callback: yaml
       callback_result_format: yaml
 
 verifier:

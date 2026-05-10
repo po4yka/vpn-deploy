@@ -19,13 +19,12 @@ platforms:
 
 provisioner:
   name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../..
   inventory:
     host_vars:
       vpn-nginx-debian13:
         ansible_user: root
-  config_options:
-    defaults:
-      stdout_callback: yaml
 
 verifier:
   name: ansible

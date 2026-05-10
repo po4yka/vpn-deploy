@@ -1,0 +1,30 @@
+---
+# ansible-lint configuration. Production profile is the default; we skip
+# rules where our usage is intentional and well-tested:
+#
+# - name[casing]              molecule verify.yml uses lowercase task names
+#                             for readability; this is test scaffolding, not
+#                             production config.
+# - command-instead-of-module  systemctl is sometimes the right tool — e.g.
+#                             `systemctl is-active` for assertion (idempotent
+#                             read-only check; the systemd module would emit
+#                             changed=False but is heavier).
+# - var-naming[no-role-prefix]  register vars in molecule scenarios are
+#                             scoped to the test play and don't leak into
+#                             the role's runtime variable namespace.
+# - ignore-errors             used intentionally in handler `rescue:` blocks
+#                             where the rescue is best-effort cleanup.
+
+profile: production
+
+skip_list:
+  - name[casing]
+  - command-instead-of-module
+  - var-naming[no-role-prefix]
+  - ignore-errors
+  - yaml[colons]                 # mirrors .yamllint.yml — alignment is intentional
+
+exclude_paths:
+  - .git/
+  - .venv/
+  - ansible/inventory/generated.ini
