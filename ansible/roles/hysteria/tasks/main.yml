@@ -44,12 +44,18 @@
       - hysteria_sha256 | length > 0
     fail_msg: "Add hysteria.linux_{{ hysteria_arch }}_sha256 to your secrets file."
 
+- name: Check whether the pinned Hysteria release is already on disk
+  ansible.builtin.stat:
+    path: "{{ hysteria_install_root }}/releases/{{ hysteria.version }}/hysteria"
+  register: hysteria_release_binary
+
 - name: Download pinned Hysteria release
   ansible.builtin.get_url:
     url: "https://github.com/apernet/hysteria/releases/download/app/{{ hysteria.version }}/hysteria-linux-{{ hysteria_arch }}"
     dest: "/tmp/hysteria-{{ hysteria.version }}-linux-{{ hysteria_arch }}"
     checksum: "sha256:{{ hysteria_sha256 }}"
     mode: "0644"
+  when: not hysteria_release_binary.stat.exists
 
 - name: Create release directory
   ansible.builtin.file:
@@ -58,6 +64,7 @@
     owner: root
     group: root
     mode: "0755"
+  when: not hysteria_release_binary.stat.exists
 
 - name: Install hysteria binary into release directory
   ansible.builtin.copy:
@@ -67,6 +74,7 @@
     owner: root
     group: root
     mode: "0755"
+  when: not hysteria_release_binary.stat.exists
 
 - name: Point current symlink at pinned release
   ansible.builtin.file:

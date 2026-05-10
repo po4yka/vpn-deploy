@@ -63,13 +63,16 @@
   notify: Reload nginx
 
 - name: Render nginx site
+  # `template.validate` requires the validate command to contain `%s`
+  # (the rendered tempfile path). Validating a single nginx server-block
+  # outside the parent http {} context fails on its own, so we run a
+  # separate `nginx -t` after the symlink is in place.
   ansible.builtin.template:
     src: site.conf.j2
     dest: /etc/nginx/sites-available/vpn-xhttp.conf
     owner: root
     group: root
     mode: "0644"
-    validate: "nginx -t -c /etc/nginx/nginx.conf"
   notify: Reload nginx
 
 - name: Enable nginx site
@@ -79,6 +82,11 @@
     state: link
     force: true
   notify: Reload nginx
+
+- name: Validate the full nginx config now the new site is enabled
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
 
 - name: Ensure nginx is enabled and started
   ansible.builtin.systemd_service:
