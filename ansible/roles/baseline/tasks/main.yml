@@ -1,0 +1,75 @@
+---
+# Source: reproducible-vps-provisioning-2026 §6 + ssh-hardening-censorship-context.
+
+- name: Install baseline packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - jq
+      - unzip
+      - nftables
+      - logrotate
+      - systemd-timesyncd
+      - rsync
+      - htop
+      - dnsutils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Disable systemd-resolved listening on 53 (we'll let resolvconf manage)
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/no-stub.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Resolve]
+      DNSStubListener=no
+  notify: Restart systemd-resolved
+  when: ansible_facts.services['systemd-resolved.service'] is defined
+
+- name: Ensure timesync is enabled
+  ansible.builtin.systemd_service:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+
+- name: Drop SSH hardening config
+  ansible.builtin.template:
+    src: sshd_config.d-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/20-ansible-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "sshd -t -f /etc/ssh/sshd_config"
+  notify: Reload ssh
+
+- name: Drop sysctl tuning
+  ansible.builtin.template:
+    src: sysctl-vpn.conf.j2
+    dest: /etc/sysctl.d/90-vpn.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply sysctl
+
+- name: Enable IP forwarding only when AmneziaWG is in scope
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/91-vpn-forward.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+  notify: Apply sysctl
+  when: vpn.enable_amneziawg | default(false)
+
+- name: Remove forwarding sysctl when AmneziaWG is disabled
+  ansible.builtin.file:
+    path: /etc/sysctl.d/91-vpn-forward.conf
+    state: absent
+  notify: Apply sysctl
+  when: not (vpn.enable_amneziawg | default(false))

@@ -1,0 +1,61 @@
+title = "vpn-deploy custom rules"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "vless-uri"
+description = "VLESS subscription URI"
+regex = '''vless://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+'''
+tags = ["vpn", "secret"]
+
+[[rules]]
+id = "trojan-uri"
+description = "Trojan URI"
+regex = '''trojan://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+'''
+tags = ["vpn", "secret"]
+
+[[rules]]
+id = "hysteria2-uri"
+description = "Hysteria2 URI"
+regex = '''hysteria2://[A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]+'''
+tags = ["vpn", "secret"]
+
+[[rules]]
+id = "xray-reality-private-key"
+description = "Xray REALITY private key"
+regex = '''(?i)(privateKey|reality_private_key)["'\s:=]+[A-Za-z0-9_-]{30,}'''
+tags = ["vpn", "secret"]
+
+[[rules]]
+id = "wireguard-private-key"
+description = "WireGuard / AmneziaWG private key"
+regex = '''(?i)(privatekey|private_key)["'\s:=]+[A-Za-z0-9+/]{40,}={0,2}'''
+tags = ["vpn", "secret"]
+
+[[rules]]
+id = "subscription-token"
+description = "Subscription token / path"
+regex = '''(?i)(sub|subscription).{0,30}(token|uuid|key)["'\s:=]+[A-Za-z0-9._~/-]{16,}'''
+tags = ["vpn", "secret"]
+
+[[rules]]
+id = "age-secret-key"
+description = "age secret key"
+regex = '''AGE-SECRET-KEY-[A-Z0-9]{58}'''
+tags = ["age", "secret"]
+
+[allowlist]
+description = "Examples and placeholders that look like secrets but are not"
+paths = [
+    '''secrets/prod\.secrets\.example\.yaml''',
+    '''docs/.*\.md''',
+    '''README\.md''',
+    '''.*\.example\..*''',
+]
+regexes = [
+    '''REPLACE_WITH_[A-Z_]+''',
+    '''<[A-Z_]+>''',
+    '''AAAA_REPLACE_WITH_PUBLIC_KEY''',
+    '''age-keygen''',
+]

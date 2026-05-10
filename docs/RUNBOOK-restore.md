@@ -1,0 +1,132 @@
+# Runbook — disaster recovery / restore
+
+Source-of-truth: `vpn-disaster-recovery-restore-2026 § 7` ("Restore in
+15-30 minutes"). This runbook adapts that procedure to the actual code in
+this repo.
+
+## What you need
+
+- The repo (git clone — public).
+- The encrypted SOPS secrets file (`~/.config/vpn-provision/prod.secrets.sops.yaml`).
+- Your age private key (`~/.config/vpn-provision/age.key`).
+- The Terraform state file (or willingness to `terraform import` an
+  existing VPS).
+- Optional: a recent restic snapshot from the old VPS, if you want to
+  restore configs verbatim instead of re-rendering from secrets.
+
+## Path A — full rebuild from scratch (recommended)
+
+This is the path the architecture is designed for. Don't restore configs;
+rebuild them deterministically from secrets and templates.
+
+```bash
+# 1. Clone the repo on a clean operator workstation
+git clone <repo> ~/GitRep/vpn-deploy
+cd ~/GitRep/vpn-deploy
+
+# 2. Restore your age key + SOPS file
+mkdir -p ~/.config/vpn-provision
+# (copy from your encrypted backup / hardware key / 1Password)
+
+# 3. Provision a fresh VPS — possibly in a different ASN if the old one burned
+$EDITOR terraform/providers/upcloud/environments/prod.tfvars
+make init plan apply inventory wait
+
+# 4. Deploy
+make decrypt
+make dry-run
+make deploy
+make verify
+make clean
+```
+
+You're done. The new VPS has identical service surface to the old one
+(same Xray version, same nginx config shape, same Hysteria policy, same
+AWG peers), generated from the same secrets file. Clients reconnect with
+their existing URIs (which encode UUIDs/passwords, not IPs — assuming
+you used DNS or floating IP).
+
+If clients used bare IP, reissue URIs with `scripts/new-client.sh
+--emit-uri <name>` against each client name.
+
+## Path B — restore from restic snapshot
+
+Use only when (a) you have a recent restic backup, (b) you trust the
+secrets at the time of the snapshot, and (c) you want to come back up
+faster than path A. Note: secrets in the restic snapshot are server-side
+artifacts (rendered configs); the canonical source is still the SOPS
+file.
+
+```bash
+# 1. Provision a fresh VPS
+$EDITOR terraform/providers/upcloud/environments/prod.tfvars
+make init plan apply inventory wait
+
+# 2. Push baseline + firewall + backup role only (gets restic installed)
+ANSIBLE_TAGS="baseline,firewall,backup" \
+ansible-playbook ansible/playbooks/site.yml --tags "baseline,firewall,backup"
+
+# 3. Push the restic password (already in your secrets file)
+make decrypt
+
+# 4. Copy restic repo from old backup target — this depends on where you sync
+#    restic. Local-only repo means SCP from a forensic snapshot of the old
+#    disk. Operators with remote restic targets (S3, BorgBase, etc.) point
+#    the new VPS at the same target.
+
+# 5. Restore configs
+ssh deploy@<new-vps>
+sudo restic -r /var/backups/vpn-restic --password-file /etc/restic/password \
+    restore latest --target /
+
+# 6. Reconcile with Ansible (may show drift — investigate before accepting)
+make dry-run
+
+# 7. If drift is acceptable / expected, deploy to overwrite restored files
+#    with template-rendered ones from current secrets:
+make deploy
+make verify
+make clean
+```
+
+The synthesis page is explicit: "do not hand-repair a snowflake server."
+Path A is the default. Path B exists for the "I need to be live in 15
+minutes and have a known-good restic snapshot" case.
+
+## Backup verification (recurring task)
+
+The `backup` role runs a daily restic snapshot. Verify quarterly:
+
+```bash
+ssh deploy@<vps>
+sudo restic -r /var/backups/vpn-restic --password-file /etc/restic/password snapshots
+sudo restic -r /var/backups/vpn-restic --password-file /etc/restic/password \
+    restore latest --target /tmp/restic-test --dry-run
+```
+
+If `--dry-run` errors, the backup is corrupt. Investigate before you
+need it.
+
+## Backup repository leak
+
+If you suspect the restic repository itself is compromised (e.g., the
+remote target was breached, or the password leaked):
+
+1. Treat every secret in the snapshots as compromised — the snapshots
+   contain rendered configs with REALITY private keys, Hysteria certs,
+   AWG private keys.
+2. Rotate everything per `RUNBOOK-rotate.md` levels 2–4.
+3. Re-init the repo with a new password (see `RUNBOOK-rotate.md` § 4).
+
+## RTO / RPO targets
+
+From the synthesis page:
+
+- **RPO** (data loss tolerance): up to 24 hours (daily restic snapshot).
+  Lower if you sync remote more often.
+- **RTO** (time to recover): 15–30 minutes for path A on a pre-funded
+  provider account. Add provider-account-creation time if you don't have
+  a sub-account already.
+
+If your operational target is tighter than 30 minutes RTO, you should be
+running multi-VPS already. See `RUNBOOK-add-fallback.md`.

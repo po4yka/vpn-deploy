@@ -1,0 +1,83 @@
+---
+- name: Verify VPN VPS — post-deploy gates
+  hosts: vpn
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - "{{ lookup('env', 'VPN_SECRETS_FILE') }}"
+
+  tasks:
+    - name: Cloud-init bootstrap marker exists
+      ansible.builtin.stat:
+        path: /var/lib/cloud-init-vpn-bootstrap.done
+      register: cloud_marker
+      failed_when: not cloud_marker.stat.exists
+
+    - name: nftables config syntax valid
+      ansible.builtin.command:
+        cmd: nft -c -f /etc/nftables.conf
+      changed_when: false
+
+    - name: Xray config valid
+      ansible.builtin.command:
+        cmd: /usr/local/bin/xray run -test -config /etc/xray/config.json
+      changed_when: false
+      when: vpn.enable_xray_reality | default(true)
+
+    - name: Xray service active
+      ansible.builtin.command:
+        cmd: systemctl is-active xray
+      register: xray_status
+      changed_when: false
+      failed_when: xray_status.stdout != "active"
+      when: vpn.enable_xray_reality | default(true)
+
+    - name: TCP/443 listening
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ss -lnt | awk '{print $4}' | grep -q ':443$'
+        executable: /bin/bash
+      changed_when: false
+
+    - name: nginx -t
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+      when: vpn.enable_nginx_xhttp | default(true)
+
+    - name: Hysteria service active
+      ansible.builtin.command:
+        cmd: systemctl is-active hysteria-server
+      register: hy_status
+      changed_when: false
+      failed_when: hy_status.stdout != "active"
+      when: vpn.enable_hysteria | default(false)
+
+    - name: UDP/443 listening
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ss -lnu | awk '{print $4}' | grep -q ':443$'
+        executable: /bin/bash
+      changed_when: false
+      when: vpn.enable_hysteria | default(false)
+
+    - name: AmneziaWG interface up
+      ansible.builtin.command:
+        cmd: awg show awg0
+      changed_when: false
+      when: vpn.enable_amneziawg | default(false)
+
+    - name: SSH password auth disabled
+      ansible.builtin.command:
+        cmd: sshd -T
+      register: sshd_t
+      changed_when: false
+
+    - name: SSH disallows password auth
+      ansible.builtin.assert:
+        that:
+          - "'passwordauthentication no' in sshd_t.stdout | lower"
+          - "'permitrootlogin no' in sshd_t.stdout | lower"

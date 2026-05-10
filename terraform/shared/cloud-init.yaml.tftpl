@@ -1,0 +1,52 @@
+#cloud-config
+
+package_update: true
+package_upgrade: false
+package_reboot_if_required: false
+
+users:
+  - default
+  - name: ${admin_user}
+    gecos: VPN Deploy User
+    groups: [sudo]
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ${admin_ssh_public_key}
+
+ssh_pwauth: false
+disable_root: true
+
+packages:
+  - python3
+  - python3-apt
+  - sudo
+  - ca-certificates
+  - curl
+  - jq
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/10-cloud-init-hardening.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
+      X11Forwarding no
+
+  - path: /etc/vpn-build-id
+    owner: root:root
+    permissions: "0644"
+    content: |
+      provisioned_by=cloud-init
+      next_stage=ansible
+      build_env=${build_env}
+
+runcmd:
+  - [systemctl, reload, ssh]
+  - [sh, -c, "touch /var/lib/cloud-init-vpn-bootstrap.done"]
+
+final_message: "VPN VPS bootstrap complete after $UPTIME seconds"

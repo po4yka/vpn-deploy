@@ -1,0 +1,41 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Restart hysteria
+  block:
+    - name: Restart hysteria-server
+      ansible.builtin.systemd_service:
+        name: hysteria-server
+        state: restarted
+
+    - name: Wait for hysteria-server to become active
+      ansible.builtin.command:
+        cmd: systemctl is-active hysteria-server
+      register: hy_active
+      retries: 5
+      delay: 2
+      until: hy_active.stdout == "active"
+      changed_when: false
+
+  rescue:
+    - name: Restore previous Hysteria config
+      ansible.builtin.copy:
+        src: "{{ hysteria_config_dir }}/config.yaml.prev"
+        dest: "{{ hysteria_config_dir }}/config.yaml"
+        remote_src: true
+        owner: root
+        group: hysteria
+        mode: "0640"
+      ignore_errors: true
+
+    - name: Restart hysteria-server after rollback
+      ansible.builtin.systemd_service:
+        name: hysteria-server
+        state: restarted
+      ignore_errors: true
+
+    - name: Fail deployment after Hysteria rollback attempt
+      ansible.builtin.fail:
+        msg: "Hysteria restart failed; previous config was restored if available."

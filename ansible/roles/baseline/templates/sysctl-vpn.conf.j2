@@ -1,0 +1,25 @@
+# TCP performance — see proxy-server-resource-tuning concept page.
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_syncookies = 1
+net.ipv4.tcp_mtu_probing = 1
+
+# BBR congestion control if available (kernel >=4.9 has it; Debian 13 / Ubuntu 24.04 do).
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+
+# Spoof protection
+net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.default.rp_filter = 1
+
+# Forwarding handled separately in 91-vpn-forward.conf when AWG is enabled.
+net.ipv4.ip_forward = 0
+net.ipv6.conf.all.forwarding = 0
+
+# Connection budget (Hysteria + many concurrent VLESS streams)
+net.core.somaxconn = 4096
+net.ipv4.tcp_max_syn_backlog = 4096
+fs.file-max = 1048576
+
+# IPv6: keep RA off by default; if the host has only IPv4, no harm done
+net.ipv6.conf.default.accept_ra = 0
+net.ipv6.conf.all.accept_ra = 0

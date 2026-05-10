@@ -1,0 +1,9 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Reload amneziawg
+  ansible.builtin.command:
+    cmd: awg syncconf {{ amneziawg.interface }} {{ amneziawg_config_dir }}/{{ amneziawg.interface }}.conf
+  changed_when: true

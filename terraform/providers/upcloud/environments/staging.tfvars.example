@@ -1,0 +1,22 @@
+# Copy to staging.tfvars and fill. Use a different REALITY keypair, target,
+# and admin SSH key from prod. Do NOT commit staging.tfvars.
+
+server_name = "vpn-staging-fi1"
+zone        = "fi-hel1"
+plan        = "1xCPU-1GB"
+
+storage_template = "REPLACE_WITH_TEMPLATE_UUID"
+storage_size_gb  = 20
+
+admin_user           = "deploy"
+admin_ssh_public_key = "ssh-ed25519 AAAA_REPLACE_WITH_STAGING_KEY operator@laptop"
+
+allowed_ssh_cidrs = ["203.0.113.42/32"]
+
+enable_hysteria = true
+build_env       = "staging"
+
+labels = {
+  project = "vpn-deploy"
+  env     = "staging"
+}

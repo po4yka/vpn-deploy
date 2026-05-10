@@ -1,0 +1,73 @@
+---
+# P1 transport: nginx fronts 443/tcp and proxies a path to the Xray XHTTP
+# inbound on 127.0.0.1:{{ nginx_xhttp_port }}. RU baseline = direct foreign
+# VPS, no CDN. See docs/CDN-DECISION.md.
+#
+# Source: server-xray-vless concept page + xhttp-transport concept page.
+
+- name: Install nginx
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - openssl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure TLS material directory
+  ansible.builtin.file:
+    path: /etc/nginx/tls
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Drop server certificate (full chain)
+  ansible.builtin.copy:
+    content: "{{ nginx_xhttp.cert_pem }}"
+    dest: /etc/nginx/tls/{{ nginx_xhttp.server_name }}.fullchain.pem
+    owner: root
+    group: root
+    mode: "0644"
+  no_log: true
+  diff: false
+
+- name: Drop server certificate key
+  ansible.builtin.copy:
+    content: "{{ nginx_xhttp.key_pem }}"
+    dest: /etc/nginx/tls/{{ nginx_xhttp.server_name }}.key
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+
+- name: Disable default nginx site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+
+- name: Render nginx site
+  ansible.builtin.template:
+    src: site.conf.j2
+    dest: /etc/nginx/sites-available/vpn-xhttp.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "nginx -t -c /etc/nginx/nginx.conf"
+  notify: Reload nginx
+
+- name: Enable nginx site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/vpn-xhttp.conf
+    dest: /etc/nginx/sites-enabled/vpn-xhttp.conf
+    state: link
+    force: true
+  notify: Reload nginx
+
+- name: Ensure nginx is enabled and started
+  ansible.builtin.systemd_service:
+    name: nginx
+    enabled: true
+    state: started

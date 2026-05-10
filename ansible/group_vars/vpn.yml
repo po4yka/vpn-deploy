@@ -1,0 +1,3 @@
+---
+# Group-specific vars for the [vpn] inventory group. Per-role tunables live
+# inside roles/<name>/defaults/. Secrets are sourced from VPN_SECRETS_FILE.

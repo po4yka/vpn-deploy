@@ -1,0 +1,120 @@
+---
+# Source: vpn-disaster-recovery-restore-2026 §4.
+#
+# Local-first restic repository. Remote sync is opt-in via a systemd timer
+# operators can wire up themselves. The point here is reproducible "restore in
+# 15-30 minutes" from the synthesis page §7.
+
+- name: Install restic
+  ansible.builtin.apt:
+    name:
+      - restic
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure restic repo directory
+  ansible.builtin.file:
+    path: "{{ restic_repo_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Drop restic password file
+  ansible.builtin.copy:
+    content: "{{ backup.restic_password }}"
+    dest: /etc/restic/password
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+
+- name: Initialize restic repo if missing
+  ansible.builtin.command:
+    cmd: restic -r {{ restic_repo_dir }} --password-file /etc/restic/password init
+  register: restic_init
+  changed_when: "'created restic repository' in restic_init.stderr or 'created restic repository' in restic_init.stdout"
+  failed_when:
+    - restic_init.rc != 0
+    - "'already initialized' not in (restic_init.stderr | default(''))"
+
+- name: Drop backup script
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/vpn-backup.sh
+    owner: root
+    group: root
+    mode: "0750"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      REPO="{{ restic_repo_dir }}"
+      export RESTIC_PASSWORD_FILE=/etc/restic/password
+
+      INCLUDES=(
+        /etc/xray
+        /etc/hysteria
+        /etc/amnezia
+        /etc/nginx
+        /etc/nftables.conf
+        /etc/ssh
+        /etc/sysctl.d
+        /etc/systemd/system
+      )
+
+      restic -r "$REPO" backup \
+        --tag "vpn-stack" \
+        --tag "host=$(hostname)" \
+        "${INCLUDES[@]}"
+
+      restic -r "$REPO" forget \
+        --tag vpn-stack \
+        --keep-daily 7 --keep-weekly 4 --keep-monthly 6 \
+        --prune
+
+- name: Drop backup systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/vpn-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=VPN config backup (restic)
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/vpn-backup.sh
+      Nice=10
+      IOSchedulingClass=best-effort
+      IOSchedulingPriority=7
+
+- name: Drop backup systemd timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/vpn-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Run VPN config backup daily
+
+      [Timer]
+      OnCalendar=*-*-* 03:30:00
+      RandomizedDelaySec=15m
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: Reload systemd
+
+- name: Enable backup timer
+  ansible.builtin.systemd_service:
+    name: vpn-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true

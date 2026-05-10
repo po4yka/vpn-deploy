@@ -1,0 +1,3 @@
+---
+monitoring:
+  node_exporter_listen: "127.0.0.1:9100"

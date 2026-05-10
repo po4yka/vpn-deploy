@@ -1,0 +1,34 @@
+# Subscription delivery host. Listens on a non-default port to keep the
+# transport endpoint and the delivery endpoint topologically separated.
+
+server {
+    listen {{ subscription.port | default(8444) }} ssl http2;
+    listen [::]:{{ subscription.port | default(8444) }} ssl http2;
+
+    server_name {{ subscription.server_name | default(nginx_xhttp.server_name) }};
+
+    ssl_certificate     /etc/nginx/tls/{{ subscription.server_name | default(nginx_xhttp.server_name) }}.fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/{{ subscription.server_name | default(nginx_xhttp.server_name) }}.key;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Cache-Control "no-store" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    # Token-keyed payload: /sub/<token>
+    location ~ ^/sub/([A-Za-z0-9_-]{16,64})$ {
+        alias /var/lib/vpn-sub/$1;
+        default_type application/json;
+        try_files $uri =404;
+
+        # Disable access logging — synthesis §7 requires no-log on this host.
+        access_log off;
+    }
+
+    # Reject everything else.
+    location / {
+        return 404;
+    }
+
+    error_log /var/log/nginx/vpn-sub.error.log warn;
+}

@@ -1,0 +1,130 @@
+---
+# P2 transport: Hysteria2 over QUIC/HTTP3 on UDP/443. Pinned release with
+# symlink rollback, validate-before-restart pattern.
+#
+# Source: hysteria2-tuic concept page.
+
+- name: Create hysteria system user
+  ansible.builtin.user:
+    name: hysteria
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/hysteria
+    create_home: true
+
+- name: Ensure hysteria directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ hysteria_config_dir }}", mode: "0750", owner: "root", group: "hysteria" }
+    - { path: "{{ hysteria_install_root }}/releases", mode: "0755" }
+    - { path: "{{ hysteria_log_dir }}", mode: "0750", owner: "hysteria", group: "hysteria" }
+
+- name: Set architecture-specific Hysteria archive facts
+  ansible.builtin.set_fact:
+    hysteria_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+    hysteria_sha256: >-
+      {{ (hysteria.linux_amd64_sha256 if ansible_architecture == 'x86_64'
+          else hysteria.linux_arm64_sha256 | default('')) }}
+
+- name: SHA256 for current architecture is set
+  ansible.builtin.assert:
+    that:
+      - hysteria_sha256 | length > 0
+    fail_msg: "Add hysteria.linux_{{ hysteria_arch }}_sha256 to your secrets file."
+
+- name: Download pinned Hysteria release
+  ansible.builtin.get_url:
+    url: "https://github.com/apernet/hysteria/releases/download/app/{{ hysteria.version }}/hysteria-linux-{{ hysteria_arch }}"
+    dest: "/tmp/hysteria-{{ hysteria.version }}-linux-{{ hysteria_arch }}"
+    checksum: "sha256:{{ hysteria_sha256 }}"
+    mode: "0644"
+
+- name: Create release directory
+  ansible.builtin.file:
+    path: "{{ hysteria_install_root }}/releases/{{ hysteria.version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install hysteria binary into release directory
+  ansible.builtin.copy:
+    src: "/tmp/hysteria-{{ hysteria.version }}-linux-{{ hysteria_arch }}"
+    dest: "{{ hysteria_install_root }}/releases/{{ hysteria.version }}/hysteria"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Point current symlink at pinned release
+  ansible.builtin.file:
+    src: "{{ hysteria_install_root }}/releases/{{ hysteria.version }}"
+    dest: "{{ hysteria_install_root }}/current"
+    state: link
+    force: true
+  notify: Restart hysteria
+
+- name: Link hysteria into local bin
+  ansible.builtin.file:
+    src: "{{ hysteria_install_root }}/current/hysteria"
+    dest: /usr/local/bin/hysteria
+    state: link
+    force: true
+
+- name: Drop TLS material
+  ansible.builtin.copy:
+    content: "{{ item.content }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: hysteria
+    mode: "0640"
+  loop:
+    - { content: "{{ hysteria.cert_pem }}", dest: "{{ hysteria_config_dir }}/server.fullchain.pem" }
+    - { content: "{{ hysteria.key_pem }}",  dest: "{{ hysteria_config_dir }}/server.key" }
+  no_log: true
+  diff: false
+
+- name: Backup previous Hysteria config if exists
+  ansible.builtin.copy:
+    src: "{{ hysteria_config_dir }}/config.yaml"
+    dest: "{{ hysteria_config_dir }}/config.yaml.prev"
+    remote_src: true
+    owner: root
+    group: hysteria
+    mode: "0640"
+  ignore_errors: true
+  changed_when: false
+
+- name: Render Hysteria config
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ hysteria_config_dir }}/config.yaml"
+    owner: root
+    group: hysteria
+    mode: "0640"
+  no_log: true
+  diff: false
+  notify: Restart hysteria
+
+- name: Install hysteria-server systemd unit
+  ansible.builtin.template:
+    src: hysteria-server.service.j2
+    dest: /etc/systemd/system/hysteria-server.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart hysteria
+
+- name: Ensure hysteria-server is enabled and started
+  ansible.builtin.systemd_service:
+    name: hysteria-server
+    enabled: true
+    state: started
+    daemon_reload: true

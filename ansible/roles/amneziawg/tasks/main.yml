@@ -1,0 +1,99 @@
+---
+# P2 device-VPN transport: AmneziaWG userspace install on Debian 13 / Ubuntu 24.04.
+# Source: amneziawg-userspace-debian-install + awg-systemd-split-tunnel-pattern.
+#
+# Userspace path is preferred for portability across kernels. The kernel module
+# variant ships separately and is not assumed here.
+
+- name: Install build dependencies for AmneziaWG userspace
+  ansible.builtin.apt:
+    name:
+      - golang
+      - git
+      - make
+      - libmnl-dev
+      - resolvconf
+      - iproute2
+      - iptables
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Clone amneziawg-go
+  ansible.builtin.git:
+    repo: https://github.com/amnezia-vpn/amneziawg-go
+    dest: /opt/src/amneziawg-go
+    version: "{{ amneziawg.version | default('main') }}"
+    depth: 1
+    update: false
+
+- name: Build amneziawg-go
+  ansible.builtin.command:
+    cmd: make
+    chdir: /opt/src/amneziawg-go
+    creates: /opt/src/amneziawg-go/amneziawg-go
+
+- name: Install amneziawg-go binary
+  ansible.builtin.copy:
+    src: /opt/src/amneziawg-go/amneziawg-go
+    dest: /usr/local/bin/amneziawg-go
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clone amneziawg-tools
+  ansible.builtin.git:
+    repo: https://github.com/amnezia-vpn/amneziawg-tools
+    dest: /opt/src/amneziawg-tools
+    version: "{{ amneziawg.tools_version | default('main') }}"
+    depth: 1
+    update: false
+
+- name: Build amneziawg-tools
+  ansible.builtin.command:
+    cmd: make
+    chdir: /opt/src/amneziawg-tools/src
+    creates: /opt/src/amneziawg-tools/src/awg
+
+- name: Install amneziawg-tools
+  ansible.builtin.command:
+    cmd: make install
+    chdir: /opt/src/amneziawg-tools/src
+  args:
+    creates: /usr/bin/awg
+
+- name: Ensure AmneziaWG config directory
+  ansible.builtin.file:
+    path: "{{ amneziawg_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Render AmneziaWG interface config
+  ansible.builtin.template:
+    src: awg0.conf.j2
+    dest: "{{ amneziawg_config_dir }}/{{ amneziawg.interface }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+  notify: Reload amneziawg
+
+- name: Install awg-quick systemd unit
+  ansible.builtin.template:
+    src: awg-quick@.service.j2
+    dest: /etc/systemd/system/awg-quick@.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Enable and start awg-quick@<iface>
+  ansible.builtin.systemd_service:
+    name: "awg-quick@{{ amneziawg.interface }}"
+    enabled: true
+    state: started
+    daemon_reload: true

@@ -1,0 +1,59 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+terraform/providers/*/.terraform/
+terraform/providers/*/.terraform.lock.hcl
+terraform/providers/*/*.tfstate
+terraform/providers/*/*.tfstate.*
+terraform/providers/*/*.tfplan
+terraform/providers/*/environments/*.tfvars
+!terraform/providers/*/environments/*.tfvars.example
+
+# Ansible
+ansible/inventory/generated.ini
+*.retry
+.ansible/
+.ansible-cache/
+
+# Secrets
+secrets/*
+!secrets/README.md
+!secrets/.gitkeep
+!secrets/prod.secrets.example.yaml
+.env
+.envrc
+*.key
+*.pem
+*.age
+
+# Decrypted SOPS files
+*.sops.yaml.dec
+*.sops.json.dec
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# pre-commit
+.pre-commit-cache/

@@ -1,0 +1,131 @@
+---
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: gitleaks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks with repo rules
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: ./.gitleaks.toml
+          GITLEAKS_NOTIFY_USER_LIST: ""
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+  terraform:
+    name: terraform fmt + validate
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [upcloud, hetzner, vultr]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.13.0"
+
+      - name: terraform fmt -check
+        working-directory: terraform/providers/${{ matrix.provider }}
+        run: terraform fmt -check -recursive
+
+      - name: terraform init -backend=false
+        working-directory: terraform/providers/${{ matrix.provider }}
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        working-directory: terraform/providers/${{ matrix.provider }}
+        run: terraform validate
+
+  cloud-init:
+    name: cloud-init schema
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.13.0"
+
+      - name: Install cloud-init
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cloud-init
+
+      - name: Render cloud-init template
+        working-directory: terraform/providers/upcloud
+        run: |
+          terraform init -backend=false
+          terraform console <<'EOF' > /tmp/cloud-init.rendered.yaml
+          templatefile("../../shared/cloud-init.yaml.tftpl", {
+            admin_user           = "deploy"
+            admin_ssh_public_key = "ssh-ed25519 AAAA_REPLACE_WITH_PUBLIC_KEY operator@laptop"
+            build_env            = "ci"
+          })
+          EOF
+          # terraform console wraps the result in quotes; strip them
+          sed -i '1s/^"//; $s/"$//' /tmp/cloud-init.rendered.yaml
+          # Unescape \n that terraform console inserts
+          python3 -c 'import sys; print(sys.stdin.read().encode().decode("unicode_escape"))' \
+            < /tmp/cloud-init.rendered.yaml > /tmp/cloud-init.unescaped.yaml
+          mv /tmp/cloud-init.unescaped.yaml /tmp/cloud-init.rendered.yaml
+
+      - name: Validate with cloud-init schema
+        run: cloud-init schema --config-file /tmp/cloud-init.rendered.yaml
+
+  ansible:
+    name: ansible-lint + syntax-check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned tooling
+        run: |
+          pip install -r requirements.txt
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: ansible-lint
+        working-directory: ansible
+        env:
+          ANSIBLE_CONFIG: ./ansible.cfg
+        run: ansible-lint
+
+      - name: ansible-playbook --syntax-check
+        working-directory: ansible
+        env:
+          ANSIBLE_CONFIG: ./ansible.cfg
+          # site.yml asserts VPN_SECRETS_FILE is set; provide a stub for syntax-check.
+          VPN_SECRETS_FILE: ${{ github.workspace }}/secrets/prod.secrets.example.yaml
+        run: ansible-playbook playbooks/site.yml --syntax-check -i 'localhost,'
+
+  yaml:
+    name: yamllint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install yamllint
+        run: pip install yamllint==1.35.1
+      - name: yamllint
+        run: yamllint -c .yamllint.yml .

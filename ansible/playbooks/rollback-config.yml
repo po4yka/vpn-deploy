@@ -1,0 +1,38 @@
+---
+- name: Rollback Xray config to the previous version (.prev)
+  hosts: vpn
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: /etc/xray/config.json.prev exists
+      ansible.builtin.stat:
+        path: /etc/xray/config.json.prev
+      register: prev
+      failed_when: not prev.stat.exists
+
+    - name: Restore previous Xray config
+      ansible.builtin.copy:
+        src: /etc/xray/config.json.prev
+        dest: /etc/xray/config.json
+        remote_src: true
+        owner: root
+        group: xray
+        mode: "0640"
+
+    - name: Validate restored config
+      ansible.builtin.command:
+        cmd: /usr/local/bin/xray run -test -config /etc/xray/config.json
+      changed_when: false
+
+    - name: Restart Xray
+      ansible.builtin.systemd_service:
+        name: xray
+        state: restarted
+
+    - name: Verify Xray active
+      ansible.builtin.command:
+        cmd: systemctl is-active xray
+      register: active
+      changed_when: false
+      failed_when: active.stdout != "active"

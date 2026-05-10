@@ -1,0 +1,110 @@
+PROVIDER ?= upcloud
+ENV      ?= prod
+
+TF_ROOT       := terraform/providers/$(PROVIDER)
+ANSIBLE_DIR   := ansible
+SECRETS_FILE  ?= /tmp/vpn-$(ENV).secrets.yaml
+SOPS_FILE     ?= $(HOME)/.config/vpn-provision/$(ENV).secrets.sops.yaml
+TFVARS        := $(TF_ROOT)/environments/$(ENV).tfvars
+TFPLAN        := $(TF_ROOT)/$(ENV).tfplan
+
+export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
+
+.PHONY: help init validate plan apply inventory wait decrypt dry-run deploy verify clean \
+        rollback-xray rollback-config rotate-credentials check-prereqs
+
+help:
+	@echo "vpn-deploy Makefile"
+	@echo ""
+	@echo "Variables (override on command line):"
+	@echo "  PROVIDER  current: $(PROVIDER)  (upcloud | hetzner | vultr)"
+	@echo "  ENV       current: $(ENV)       (prod | staging)"
+	@echo ""
+	@echo "Targets:"
+	@echo "  check-prereqs  Verify required CLI tools are installed"
+	@echo "  init           terraform init in $(TF_ROOT)"
+	@echo "  validate       fmt + validate + gitleaks + ansible-lint"
+	@echo "  decrypt        sops --decrypt → $(SECRETS_FILE)"
+	@echo "  plan           terraform plan -out=$(TFPLAN)"
+	@echo "  apply          terraform apply $(TFPLAN)"
+	@echo "  inventory      render Ansible inventory from terraform outputs"
+	@echo "  wait           wait for cloud-init to finish"
+	@echo "  dry-run        ansible-playbook --check --diff"
+	@echo "  deploy         ansible-playbook site.yml"
+	@echo "  verify         ansible-playbook verify.yml"
+	@echo "  clean          shred $(SECRETS_FILE)"
+	@echo ""
+	@echo "  rollback-xray ROLLBACK_XRAY_VERSION=vX.Y.Z"
+	@echo "  rollback-config"
+	@echo "  rotate-credentials"
+
+check-prereqs:
+	@for tool in terraform ansible ansible-playbook ansible-lint sops age gitleaks jq ssh; do \
+	  command -v $$tool >/dev/null 2>&1 || { echo "missing: $$tool"; exit 1; }; \
+	done
+	@echo "all prereqs present"
+
+init:
+	terraform -chdir=$(TF_ROOT) init
+
+validate:
+	terraform -chdir=$(TF_ROOT) fmt -check -recursive
+	terraform -chdir=$(TF_ROOT) validate
+	gitleaks detect --source . --redact --no-banner
+	cd $(ANSIBLE_DIR) && ansible-lint
+	cd $(ANSIBLE_DIR) && ansible-playbook playbooks/site.yml --syntax-check
+
+decrypt:
+	@test -f "$(SOPS_FILE)" || { echo "missing $(SOPS_FILE)"; exit 1; }
+	sops --decrypt $(SOPS_FILE) > $(SECRETS_FILE)
+	chmod 0600 $(SECRETS_FILE)
+	@echo "decrypted to $(SECRETS_FILE)"
+
+plan:
+	@test -f "$(TFVARS)" || { echo "missing $(TFVARS) — copy from .example and fill"; exit 1; }
+	terraform -chdir=$(TF_ROOT) plan \
+	  -var-file=environments/$(ENV).tfvars \
+	  -out=$(ENV).tfplan
+
+apply:
+	terraform -chdir=$(TF_ROOT) apply $(ENV).tfplan
+
+inventory:
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/render-inventory.sh
+
+wait:
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/wait-cloud-init.sh
+
+dry-run:
+	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
+	VPN_SECRETS_FILE=$(SECRETS_FILE) \
+	ansible-playbook $(ANSIBLE_DIR)/playbooks/site.yml --check --diff
+
+deploy:
+	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
+	VPN_SECRETS_FILE=$(SECRETS_FILE) \
+	ansible-playbook $(ANSIBLE_DIR)/playbooks/site.yml
+
+verify:
+	VPN_SECRETS_FILE=$(SECRETS_FILE) \
+	ansible-playbook $(ANSIBLE_DIR)/playbooks/verify.yml
+
+clean:
+	@if [ -f "$(SECRETS_FILE)" ]; then \
+	  shred -u $(SECRETS_FILE) 2>/dev/null || rm -f $(SECRETS_FILE); \
+	  echo "shredded $(SECRETS_FILE)"; \
+	fi
+
+rollback-xray:
+	@test -n "$(ROLLBACK_XRAY_VERSION)" || { echo "ROLLBACK_XRAY_VERSION required"; exit 1; }
+	VPN_SECRETS_FILE=$(SECRETS_FILE) \
+	ROLLBACK_XRAY_VERSION=$(ROLLBACK_XRAY_VERSION) \
+	ansible-playbook $(ANSIBLE_DIR)/playbooks/rollback-xray.yml
+
+rollback-config:
+	VPN_SECRETS_FILE=$(SECRETS_FILE) \
+	ansible-playbook $(ANSIBLE_DIR)/playbooks/rollback-config.yml
+
+rotate-credentials:
+	VPN_SECRETS_FILE=$(SECRETS_FILE) \
+	ansible-playbook $(ANSIBLE_DIR)/playbooks/rotate-credentials.yml
