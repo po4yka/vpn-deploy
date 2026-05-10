@@ -61,32 +61,28 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
 
-      - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85  # v4
-        with:
-          terraform_version: "1.15.2"
-
       - name: Install cloud-init
         run: |
           sudo apt-get update
           sudo apt-get install -y cloud-init
 
       - name: Render cloud-init template
-        working-directory: terraform/providers/upcloud
+        # The template only uses Terraform's `${var}` interpolation (no
+        # %{ if } / for-each), so a 6-line Python render is enough — and
+        # it avoids `terraform console` which has hung indefinitely on
+        # heredoc stdin in this CI image.
         run: |
-          terraform init -backend=false
-          terraform console <<'EOF' > /tmp/cloud-init.rendered.yaml
-          templatefile("../../shared/cloud-init.yaml.tftpl", {
-            admin_user           = "deploy"
-            admin_ssh_public_key = "ssh-ed25519 AAAA_REPLACE_WITH_PUBLIC_KEY operator@laptop"
-            build_env            = "ci"
-          })
-          EOF
-          # terraform console wraps the result in quotes; strip them
-          sed -i '1s/^"//; $s/"$//' /tmp/cloud-init.rendered.yaml
-          # Unescape \n that terraform console inserts
-          python3 -c 'import sys; print(sys.stdin.read().encode().decode("unicode_escape"))' \
-            < /tmp/cloud-init.rendered.yaml > /tmp/cloud-init.unescaped.yaml
-          mv /tmp/cloud-init.unescaped.yaml /tmp/cloud-init.rendered.yaml
+          python3 - <<'PY' > /tmp/cloud-init.rendered.yaml
+          import re, pathlib
+          tpl = pathlib.Path("terraform/shared/cloud-init.yaml.tftpl").read_text()
+          vars = {
+              "admin_user": "deploy",
+              "admin_ssh_public_key":
+                  "ssh-ed25519 AAAA_REPLACE_WITH_PUBLIC_KEY operator@laptop",
+              "build_env": "ci",
+          }
+          print(re.sub(r"\$\{(\w+)\}", lambda m: vars[m.group(1)], tpl), end="")
+          PY
 
       - name: Validate with cloud-init schema
         run: cloud-init schema --config-file /tmp/cloud-init.rendered.yaml
