@@ -112,6 +112,7 @@ From now on edit only the encrypted file: `sops ~/.config/vpn-provision/prod.sec
 make init
 make validate          # must pass before continuing
 make decrypt           # writes /tmp/vpn-prod.secrets.yaml
+make validate-target   # pre-deploy probe of REALITY target
 make plan
 make apply
 make inventory
@@ -119,6 +120,7 @@ make wait              # 30–120 s, waits for cloud-init
 make dry-run           # ansible --check --diff; review what will change
 make deploy            # real run
 make verify            # post-deploy gates
+make smoke-test        # end-to-end real-traffic test through each profile
 make clean             # shred /tmp/vpn-prod.secrets.yaml
 ```
 

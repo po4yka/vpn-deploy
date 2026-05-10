@@ -70,6 +70,9 @@ make diff-secrets                         # drift detection
 make emit-singbox CLIENT=<name>           # full sing-box client JSON
 make install-hooks                        # one-time pre-commit setup
 make molecule-test ROLE=<name>            # role-level idempotence test
+make validate-target                      # pre-deploy REALITY target probe
+make smoke-test                           # end-to-end traffic test (real proxy dial)
+make blue-green GREEN_ENV=<name>          # orchestrate blue-green replacement
 ```
 
 ## Hard rules

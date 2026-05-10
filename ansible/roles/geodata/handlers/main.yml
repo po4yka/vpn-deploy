@@ -1,0 +1,10 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Reload xray geodata
+  ansible.builtin.command:
+    cmd: systemctl kill --signal=HUP xray.service
+  changed_when: true
+  failed_when: false

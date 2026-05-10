@@ -16,12 +16,23 @@ server {
     add_header Referrer-Policy "no-referrer" always;
 
     # Token-keyed payload: /sub/<token>
-    location ~ ^/sub/([A-Za-z0-9_-]{16,64})$ {
-        alias /var/lib/vpn-sub/$1;
+    # Captures the token into $vpn_sub_token so the revocation map can read it.
+    location ~ ^/sub/(?<vpn_sub_token>[A-Za-z0-9_-]{16,64})$ {
+        # Short-circuit revoked tokens (map lives in conf.d/vpn-sub-revoked.map)
+        if ($vpn_sub_revoked = 1) {
+            return 410;
+        }
+
+        # Rate-limit per source IP (zone defined in conf.d/vpn-sub-ratelimit.conf)
+        limit_req zone=vpn_sub_per_ip burst={{ subscription.rate_burst | default(3) }} nodelay;
+        limit_req_status 429;
+
+        alias /var/lib/vpn-sub/$vpn_sub_token;
         default_type application/json;
         try_files $uri =404;
 
-        # Disable access logging — synthesis §7 requires no-log on this host.
+        # No access logging on the subscription host (privacy invariant from
+        # subscription-delivery-plane-2026 §7).
         access_log off;
     }
 

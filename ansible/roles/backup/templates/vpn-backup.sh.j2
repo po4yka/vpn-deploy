@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Managed by Ansible role `backup`. Runs once daily via vpn-backup.timer.
+set -euo pipefail
+
+REPO="{{ restic_repo_dir }}"
+export RESTIC_PASSWORD_FILE=/etc/restic/password
+
+INCLUDES=(
+  /etc/xray
+  /etc/hysteria
+  /etc/amnezia
+  /etc/nginx
+  /etc/nftables.conf
+  /etc/ssh
+  /etc/sysctl.d
+  /etc/systemd/system
+  /etc/vpn-watchdog.env
+)
+
+restic -r "$REPO" backup \
+  --tag "vpn-stack" \
+  --tag "host=$(hostname)" \
+  "${INCLUDES[@]}"
+
+restic -r "$REPO" forget \
+  --tag vpn-stack \
+  --keep-daily 7 --keep-weekly 4 --keep-monthly 6 \
+  --prune
+
+{% if backup.remote.enabled | default(false) %}
+# ------------------------------------------------------------------
+# Remote sync via rclone (configured by Ansible)
+# ------------------------------------------------------------------
+RCLONE_CONFIG=/etc/rclone/rclone.conf \
+  rclone sync --quiet \
+  --transfers={{ backup.remote.transfers | default(4) }} \
+  --bwlimit={{ backup.remote.bwlimit | default('off') }} \
+  "$REPO" \
+  "{{ backup.remote.rclone_remote }}:{{ backup.remote.rclone_path }}/$(hostname)"
+
+# Verify the remote copy exists and is non-empty for today's snapshot
+RCLONE_CONFIG=/etc/rclone/rclone.conf \
+  rclone size "{{ backup.remote.rclone_remote }}:{{ backup.remote.rclone_path }}/$(hostname)" >/dev/null
+{% endif %}

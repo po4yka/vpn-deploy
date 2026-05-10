@@ -1,0 +1,142 @@
+---
+- name: Pre-flight — naive and nginx-xhttp must not both be on (port 443 conflict)
+  ansible.builtin.assert:
+    that:
+      - not (vpn.enable_nginx_xhttp | default(true))
+    fail_msg: |
+      `vpn.enable_naive` is true but `vpn.enable_nginx_xhttp` is also true. They
+      cannot coexist on the same host (both want 443/tcp). Set
+      `vpn.enable_nginx_xhttp: false` in group_vars or host_vars.
+
+- name: Install build deps for xcaddy
+  ansible.builtin.apt:
+    name:
+      - golang
+      - git
+      - curl
+      - ca-certificates
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create naive system user
+  ansible.builtin.user:
+    name: naive
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/naive
+    create_home: true
+
+- name: Ensure naive directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ naive.install_dir }}", mode: "0755" }
+    - { path: "{{ naive.config_dir }}",  mode: "0750", owner: "root", group: "naive" }
+    - { path: "{{ naive.log_dir }}",     mode: "0750", owner: "naive", group: "naive" }
+    - { path: "{{ naive.decoy_root }}",  mode: "0755", owner: "www-data", group: "www-data" }
+
+- name: Drop a plausible decoy index.html
+  ansible.builtin.copy:
+    dest: "{{ naive.decoy_root }}/index.html"
+    owner: www-data
+    group: www-data
+    mode: "0644"
+    content: |
+      <!DOCTYPE html><html><head><title>It works</title></head>
+      <body><h1>It works</h1></body></html>
+
+- name: Check whether caddy-naive binary already exists
+  ansible.builtin.stat:
+    path: /usr/local/bin/caddy-naive
+  register: caddy_naive_bin
+
+- name: Install xcaddy (transient — only when building)
+  when: not caddy_naive_bin.stat.exists
+  block:
+    - name: go install xcaddy
+      ansible.builtin.command:
+        cmd: go install github.com/caddyserver/xcaddy/cmd/xcaddy@{{ naive.xcaddy_version }}
+      environment:
+        GOPATH: /tmp/gopath
+        HOME: /tmp
+      changed_when: true
+
+    - name: xcaddy build caddy-naive
+      ansible.builtin.command:
+        cmd: |
+          /tmp/gopath/bin/xcaddy build {{ naive.caddy_version }}
+            --with {{ naive.forwardproxy_module }}
+            --output /usr/local/bin/caddy-naive
+      environment:
+        GOPATH: /tmp/gopath
+        HOME: /tmp
+        CGO_ENABLED: "0"
+      changed_when: true
+
+    - name: Set perms on caddy-naive
+      ansible.builtin.file:
+        path: /usr/local/bin/caddy-naive
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Remove transient build dirs
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/gopath
+        - /root/.cache/go-build
+
+- name: Allow caddy-naive to bind to 443
+  community.general.capabilities:
+    path: /usr/local/bin/caddy-naive
+    capability: cap_net_bind_service+ep
+    state: present
+
+- name: Drop TLS cert + key
+  ansible.builtin.copy:
+    content: "{{ item.content }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: naive
+    mode: "0640"
+  loop:
+    - { content: "{{ naive_secrets.cert_pem }}", dest: "{{ naive.config_dir }}/server.fullchain.pem" }
+    - { content: "{{ naive_secrets.key_pem }}",  dest: "{{ naive.config_dir }}/server.key" }
+  no_log: true
+  diff: false
+
+- name: Render Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ naive.config_dir }}/Caddyfile"
+    owner: root
+    group: naive
+    mode: "0640"
+  no_log: true
+  diff: false
+  notify: Restart caddy-naive
+
+- name: Install systemd unit
+  ansible.builtin.template:
+    src: caddy-naive.service.j2
+    dest: /etc/systemd/system/caddy-naive.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart caddy-naive
+
+- name: Enable caddy-naive
+  ansible.builtin.systemd_service:
+    name: caddy-naive
+    enabled: true
+    state: started
+    daemon_reload: true

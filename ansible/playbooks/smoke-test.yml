@@ -1,0 +1,205 @@
+---
+# End-to-end smoke test. Runs on the VPS itself: uses the local Xray binary
+# in client mode against its own server listeners with the first client's
+# credentials, fetches https://www.google.com/generate_204, asserts 204.
+#
+# Hysteria similar. AmneziaWG is intentionally skipped — userspace AWG would
+# need a peer + routing setup that materially mutates the host network.
+# Watchdog already covers the AWG-up case.
+#
+# This playbook is read-only with respect to deployed config: it writes
+# tmpfs-only test configs and reads /etc/xray/config.json + secrets to
+# pick a client.
+
+- name: Smoke-test the deployed VPN stack from inside the host
+  hosts: vpn
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - "{{ lookup('env', 'VPN_SECRETS_FILE') }}"
+
+  tasks:
+    - name: Pre-flight — required vars present
+      ansible.builtin.assert:
+        that:
+          - xray.clients | length > 0
+          - xray.reality_public_key is defined
+          - xray.server_names | length > 0
+        fail_msg: "secrets are missing client/REALITY data; cannot smoke-test"
+
+    - name: Set local test workdir
+      ansible.builtin.set_fact:
+        smoketest_dir: /run/vpn-smoketest
+        smoketest_client: "{{ xray.clients[0] }}"
+        smoketest_target: "https://www.google.com/generate_204"
+        smoketest_expected_code: 204
+
+    - name: Create tmpfs workdir
+      ansible.builtin.file:
+        path: "{{ smoketest_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    # ---------------------------------------------------------------
+    # P0 REALITY — Xray client dial
+    # ---------------------------------------------------------------
+    - name: Render Xray client config (REALITY)
+      when: vpn.enable_xray_reality | default(true)
+      ansible.builtin.copy:
+        dest: "{{ smoketest_dir }}/xray-client.json"
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          {
+            "log": { "loglevel": "warning" },
+            "inbounds": [{
+              "tag": "smoke-socks",
+              "listen": "127.0.0.1",
+              "port": 31080,
+              "protocol": "socks",
+              "settings": { "auth": "noauth", "udp": true }
+            }],
+            "outbounds": [{
+              "tag": "smoke-reality",
+              "protocol": "vless",
+              "settings": {
+                "vnext": [{
+                  "address": "127.0.0.1",
+                  "port": 443,
+                  "users": [{
+                    "id": "{{ smoketest_client.uuid }}",
+                    "encryption": "none",
+                    "flow": "xtls-rprx-vision"
+                  }]
+                }]
+              },
+              "streamSettings": {
+                "network": "raw",
+                "security": "reality",
+                "realitySettings": {
+                  "fingerprint": "chrome",
+                  "serverName": "{{ xray.server_names[0] }}",
+                  "publicKey": "{{ xray.reality_public_key }}",
+                  "shortId": "{{ smoketest_client.short_id }}"
+                }
+              }
+            }]
+          }
+      no_log: true
+      diff: false
+
+    - name: Run Xray smoke client (REALITY) for 6 seconds
+      when: vpn.enable_xray_reality | default(true)
+      ansible.builtin.command:
+        cmd: |
+          systemd-run --quiet --no-block --collect
+            --unit=vpn-smoke-xray
+            --property=Type=simple
+            /usr/local/bin/xray run -config {{ smoketest_dir }}/xray-client.json
+      args:
+        creates: /run/systemd/transient/vpn-smoke-xray.service
+      changed_when: true
+
+    - name: Wait briefly for the smoke listener
+      when: vpn.enable_xray_reality | default(true)
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 31080
+        timeout: 10
+
+    - name: Probe through REALITY proxy
+      when: vpn.enable_xray_reality | default(true)
+      ansible.builtin.command:
+        cmd: |
+          curl -sS -o /dev/null -w '%{http_code}'
+            --max-time 15
+            --proxy socks5h://127.0.0.1:31080
+            {{ smoketest_target }}
+      register: reality_probe
+      changed_when: false
+      failed_when: reality_probe.stdout | int != smoketest_expected_code
+
+    - name: Stop REALITY smoke client
+      when: vpn.enable_xray_reality | default(true)
+      ansible.builtin.command:
+        cmd: systemctl stop vpn-smoke-xray.service
+      changed_when: true
+      failed_when: false
+
+    # ---------------------------------------------------------------
+    # P2 Hysteria2 — client dial
+    # ---------------------------------------------------------------
+    - name: Render Hysteria client config
+      when: vpn.enable_hysteria | default(false)
+      ansible.builtin.copy:
+        dest: "{{ smoketest_dir }}/hysteria-client.yaml"
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          server: 127.0.0.1:{{ hysteria_port | default(443) }}
+          auth: "{{ hysteria.clients[0].password }}"
+          tls:
+            sni: "{{ nginx_xhttp.server_name | default(xray.server_names[0]) }}"
+            insecure: true
+          socks5:
+            listen: 127.0.0.1:31081
+      no_log: true
+      diff: false
+
+    - name: Run Hysteria smoke client
+      when: vpn.enable_hysteria | default(false)
+      ansible.builtin.command:
+        cmd: |
+          systemd-run --quiet --no-block --collect
+            --unit=vpn-smoke-hysteria
+            --property=Type=simple
+            /usr/local/bin/hysteria client -c {{ smoketest_dir }}/hysteria-client.yaml
+      args:
+        creates: /run/systemd/transient/vpn-smoke-hysteria.service
+      changed_when: true
+
+    - name: Wait for Hysteria smoke listener
+      when: vpn.enable_hysteria | default(false)
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 31081
+        timeout: 10
+
+    - name: Probe through Hysteria proxy
+      when: vpn.enable_hysteria | default(false)
+      ansible.builtin.command:
+        cmd: |
+          curl -sS -o /dev/null -w '%{http_code}'
+            --max-time 15
+            --proxy socks5h://127.0.0.1:31081
+            {{ smoketest_target }}
+      register: hysteria_probe
+      changed_when: false
+      failed_when: hysteria_probe.stdout | int != smoketest_expected_code
+
+    - name: Stop Hysteria smoke client
+      when: vpn.enable_hysteria | default(false)
+      ansible.builtin.command:
+        cmd: systemctl stop vpn-smoke-hysteria.service
+      changed_when: true
+      failed_when: false
+
+    # ---------------------------------------------------------------
+    # cleanup
+    # ---------------------------------------------------------------
+    - name: Remove smoke tmpfs workdir
+      ansible.builtin.file:
+        path: "{{ smoketest_dir }}"
+        state: absent
+
+    - name: Smoke summary
+      ansible.builtin.debug:
+        msg: |
+          REALITY: {{ reality_probe.stdout | default('skipped') }}
+          Hysteria: {{ hysteria_probe.stdout | default('skipped') }}
+          (AmneziaWG smoke-test is intentionally skipped — see watchdog role.)

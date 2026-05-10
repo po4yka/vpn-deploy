@@ -13,7 +13,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
 .PHONY: help init validate plan apply inventory wait decrypt dry-run deploy verify clean \
         rollback-xray rollback-config rotate-credentials check-prereqs \
         destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
-        molecule-test
+        molecule-test smoke-test validate-target blue-green
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -47,6 +47,9 @@ help:
 	@echo "  emit-singbox CLIENT=<name>  Emit full sing-box client JSON"
 	@echo "  install-hooks     Install pre-commit hooks for this repo"
 	@echo "  molecule-test ROLE=<name>   Run molecule test for one role"
+	@echo "  smoke-test        End-to-end traffic test through every enabled profile"
+	@echo "  validate-target   Pre-deploy probe of REALITY target (TLS/H2/SAN/uTLS)"
+	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
 	@for tool in terraform ansible ansible-playbook ansible-lint sops age gitleaks jq ssh; do \
@@ -144,3 +147,16 @@ install-hooks:
 molecule-test:
 	@test -n "$(ROLE)" || { echo "ROLE=<role-name> required (e.g. baseline, firewall, xray)"; exit 1; }
 	cd $(ANSIBLE_DIR)/roles/$(ROLE) && molecule test
+
+smoke-test:
+	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
+	VPN_SECRETS_FILE=$(SECRETS_FILE) \
+	ansible-playbook $(ANSIBLE_DIR)/playbooks/smoke-test.yml
+
+validate-target:
+	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
+	SOPS_FILE=$(SOPS_FILE) ENV=$(ENV) ./scripts/validate-reality-target.sh
+
+blue-green:
+	@test -n "$(GREEN_ENV)" || { echo "GREEN_ENV=<name> required (e.g. green, spare2)"; exit 1; }
+	PROVIDER=$(PROVIDER) BLUE_ENV=$(ENV) GREEN_ENV=$(GREEN_ENV) ./scripts/blue-green.sh

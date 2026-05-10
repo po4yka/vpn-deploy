@@ -6,8 +6,10 @@
 vpn:
   enable_xray_reality: true
   enable_nginx_xhttp: true
+  enable_naive: false
   enable_hysteria: true
   enable_amneziawg: true
+  enable_geodata: true
   enable_monitoring: true
   enable_watchdog: true
   enable_backup: true
