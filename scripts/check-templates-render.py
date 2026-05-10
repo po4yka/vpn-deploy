@@ -116,16 +116,22 @@ def validate_nginx(text: str, label: str) -> str | None:
     if not nginx:
         return None  # silently skip when nginx isn't available
 
+    import os as _os
     import re as _re
+
+    # Strip TLS material — paths point at /etc/nginx/tls which doesn't exist
+    # on the runner. Real nginx -t against deployed certs lives in molecule.
     stripped = _re.sub(
-        r"^\s*ssl_(certificate|certificate_key|trusted_certificate)\s+[^;]+;",
-        "    # ssl_certificate stripped for syntax-only check",
+        r"^\s*ssl_(certificate|certificate_key|trusted_certificate|session_tickets|prefer_server_ciphers|protocols|ciphers|session_cache|session_timeout)\s+[^;]+;",
+        "    # ssl_* directive stripped for syntax-only check",
         text, flags=_re.MULTILINE,
     )
+    # Strip per-site access_log / error_log — they reference /var/log/nginx/
+    # paths the test runner can't open.
     stripped = _re.sub(
-        r"\bssl(\s+(?:on|off))?\b",
-        "",
-        stripped,
+        r"^\s*(access_log|error_log)\s+[^;]+;",
+        "    # log directive stripped for syntax-only check",
+        stripped, flags=_re.MULTILINE,
     )
     # Remove `listen 443 ssl http2;` ssl/quic flags so nginx doesn't expect cert
     stripped = _re.sub(
@@ -133,20 +139,33 @@ def validate_nginx(text: str, label: str) -> str | None:
         r"\1\2\3",
         stripped,
     )
-    # nginx 'add_header Strict-Transport-Security' on a non-ssl server is OK; leave.
 
-    with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False) as fh:
-        fh.write("events {}\nhttp {\n" + stripped + "\n}\n")
+    # Use a writable prefix so nginx -t can open its default access/error logs
+    # and pid file. Pass empty access/error logs via -e and -g pid.
+    prefix = tempfile.mkdtemp(prefix="vpn-nginx-")
+    _os.makedirs(_os.path.join(prefix, "logs"), exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", suffix=".conf", delete=False, dir=prefix) as fh:
+        fh.write(
+            "pid logs/nginx.pid;\n"
+            "events {}\n"
+            "http {\n"
+            "    access_log logs/access.log;\n"
+            "    error_log  logs/error.log warn;\n"
+            f"{stripped}\n"
+            "}\n"
+        )
         path = fh.name
     try:
         result = subprocess.run(
-            [nginx, "-t", "-c", path], capture_output=True, text=True
+            [nginx, "-t", "-p", prefix, "-c", path],
+            capture_output=True, text=True,
         )
         if result.returncode != 0:
             return f"{label}: nginx -t failed — {result.stderr.strip()}"
         return None
     finally:
         Path(path).unlink(missing_ok=True)
+        # leave dir; tempfile cleanup is best-effort
 
 
 def main() -> int:
