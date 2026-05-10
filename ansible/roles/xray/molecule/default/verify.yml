@@ -1,0 +1,39 @@
+---
+- name: Verify xray role
+  hosts: all
+  become: true
+  tasks:
+    - name: /etc/xray/config.json exists
+      ansible.builtin.stat:
+        path: /etc/xray/config.json
+      register: cfg
+      failed_when: not cfg.stat.exists
+
+    - name: /etc/xray/config.json owned by root:xray with 0640
+      ansible.builtin.assert:
+        that:
+          - cfg.stat.pw_name == "root"
+          - cfg.stat.gr_name == "xray"
+          - cfg.stat.mode == "0640"
+
+    - name: config.json contains expected REALITY structure
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q '"protocol": "vless"' /etc/xray/config.json
+          grep -q '"security": "reality"' /etc/xray/config.json
+          grep -q '"flow": "xtls-rprx-vision"' /etc/xray/config.json
+        executable: /bin/bash
+      changed_when: false
+
+    - name: systemd unit installed
+      ansible.builtin.stat:
+        path: /etc/systemd/system/xray.service
+      register: unit
+      failed_when: not unit.stat.exists
+
+    - name: /opt/xray/current symlink points at the pinned release
+      ansible.builtin.stat:
+        path: /opt/xray/current
+      register: link
+      failed_when: not link.stat.islnk or 'v26.3.27' not in link.stat.lnk_target

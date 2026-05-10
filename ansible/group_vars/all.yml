@@ -9,6 +9,7 @@ vpn:
   enable_hysteria: true           # P2 — UDP/443
   enable_amneziawg: true          # P2 — device-VPN
   enable_monitoring: true
+  enable_watchdog: true            # local probe + ntfy/Pushover alerts
   enable_backup: true
   enable_subscription_host: false  # opt-in; not in v1 default deploy
 

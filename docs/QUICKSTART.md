@@ -19,6 +19,7 @@ Verify in one shot:
 
 ```bash
 make check-prereqs
+make install-hooks      # one-time, installs pre-commit hooks for this repo
 ```
 
 ## 1. Provider credentials
@@ -126,16 +127,21 @@ proceed to `deploy`.
 
 ## 7. Generate a client config
 
+For a full sing-box JSON with selector + urltest covering every enabled
+profile (recommended for sing-box / NekoBox / husi):
+
+```bash
+make emit-singbox CLIENT=laptop > laptop.singbox.json
+```
+
+For just URI strings (v2rayN and simpler clients):
+
 ```bash
 SOPS_FILE=~/.config/vpn-provision/prod.secrets.sops.yaml \
 ./scripts/new-client.sh --emit-uri laptop
 ```
 
-Replace the `<SERVER_IP>`, `<SNI>`, `<REALITY_PUBLIC_KEY>` placeholders in
-the printed URIs with values from your tfvars and secrets file. Import the
-URIs into sing-box / NekoBox / v2rayNG / husi.
-
-For AmneziaWG, the script also prints a private key — hand it to the
+For AmneziaWG, `new-client.sh` prints a private key — hand it to the
 device through a secure channel and put it on the device, then forget it.
 
 ## 8. External health check
@@ -148,6 +154,31 @@ HTTP_HOST=vpn.example.com \
 
 Then connect with the real client and run a real-life traffic test (curl
 through the tunnel; speedtest if useful).
+
+## 9. Recurring operator-side automation
+
+Add to your operator's cron / launchd:
+
+```bash
+# Every 30 min — external IP reachability probe (catches IP burns early)
+*/30 * * * *  cd ~/GitRep/vpn-deploy && make burn-check >> /tmp/vpn-burn.log 2>&1
+
+# Daily — encrypted backup of TF state to ~/.config/vpn-provision/state-backups/
+@daily       cd ~/GitRep/vpn-deploy && make backup-state >> /tmp/vpn-tfstate-backup.log 2>&1
+```
+
+The VPS itself runs a local watchdog every 5 minutes (the `watchdog`
+Ansible role) that pushes alerts to ntfy.sh / Pushover when probes fail.
+Set `watchdog_secrets.ntfy_topic` in your secrets file before deploy.
+
+## 10. Optional — split the age key for k-of-n recovery
+
+```bash
+./scripts/age-recovery-split.sh 2 3
+```
+
+Distributes 2-of-3 Shamir shares; any 2 shares can reconstruct the age
+private key. See `docs/AGE-RECOVERY.md` for storage discipline.
 
 ## What's next
 

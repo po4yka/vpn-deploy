@@ -1,0 +1,21 @@
+---
+- name: Converge baseline role
+  hosts: all
+  become: true
+  vars:
+    ansible_user: deploy
+    vpn:
+      enable_xray_reality: true
+      enable_nginx_xhttp: true
+      enable_hysteria: false
+      enable_amneziawg: false
+  pre_tasks:
+    - name: Create deploy user (the role assumes it via cloud-init normally)
+      ansible.builtin.user:
+        name: deploy
+        groups: sudo
+        shell: /bin/bash
+        create_home: true
+        state: present
+  roles:
+    - role: baseline

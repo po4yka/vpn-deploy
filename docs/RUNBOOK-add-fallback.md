@@ -14,17 +14,16 @@ from `multi-provider-vpn-fleet-2026`), here's how to extend.
 ## Pattern 1 — hot spare on UpCloud
 
 Use a separate `ENV` value to keep two parallel root states without
-fighting Terraform's `prevent_destroy`.
+fighting Terraform's `prevent_destroy`. The helper script
+`scripts/new-cohort.sh` does the tfvars boilerplate:
 
 ```bash
-# Create a second tfvars
-cp terraform/providers/upcloud/environments/prod.tfvars \
-   terraform/providers/upcloud/environments/spare.tfvars
+# Generate a second tfvars in a different zone
+PROVIDER=upcloud SOURCE_ENV=prod \
+  ./scripts/new-cohort.sh spare de-fra1
+$EDITOR terraform/providers/upcloud/environments/spare.tfvars   # review
 
-# Edit: change server_name (e.g. vpn-prod-fi2) and zone (e.g. de-fra1)
-$EDITOR terraform/providers/upcloud/environments/spare.tfvars
-
-# Provision and deploy
+# Provision and deploy the spare
 ENV=spare make init plan apply inventory wait dry-run deploy verify
 ```
 
@@ -86,30 +85,30 @@ $EDITOR ~/.config/vpn-provision/p0.secrets.sops.yaml         # only xray.* field
 ANSIBLE_TAGS="xray" ENV=p0 make decrypt deploy
 ```
 
-For a separate-role split, also split the `vpn.enable_*` toggles in
-`group_vars/all.yml` per host group. The simplest layout is host_vars:
+For a separate-role split, use the cohort group_vars shipped with the
+repo and the multi-host mode of `render-inventory.sh`:
 
 ```bash
-mkdir -p ansible/host_vars
-cat > ansible/host_vars/vpn-prod-p0 <<EOF
-vpn:
-  enable_xray_reality: true
-  enable_nginx_xhttp: false
-  enable_hysteria: false
-  enable_amneziawg: false
-EOF
+# Provision both nodes (different ENVs or PROVIDERs)
+ENV=p0    make init plan apply
+ENV=p1p2  make init plan apply
 
-cat > ansible/host_vars/vpn-prod-p1p2 <<EOF
-vpn:
-  enable_xray_reality: false
-  enable_nginx_xhttp: true
-  enable_hysteria: true
-  enable_amneziawg: true
-EOF
+# Render a multi-host inventory with cohort groups
+HOSTS="upcloud:p0,upcloud:p1p2" \
+COHORTS="p0,p1p2" \
+ANSIBLE_SSH_PRIVATE_KEY_FILE=~/.ssh/vpn_deploy \
+  ./scripts/render-inventory.sh
+
+# Single deploy across both — each host gets the right toggles from
+# group_vars/vpn-p0.yml or group_vars/vpn-p1p2.yml
+ansible-playbook ansible/playbooks/site.yml
 ```
 
-Then `render-inventory.sh` puts both hosts in `[vpn]` and a single
-`make deploy` configures them differently.
+The pre-shipped cohort files are:
+
+- `ansible/group_vars/vpn-p0.yml`        — REALITY only
+- `ansible/group_vars/vpn-p1p2.yml`      — XHTTP + Hysteria + AWG (no REALITY)
+- `ansible/group_vars/vpn-fullstack.yml` — explicit "all profiles" cohort
 
 ## Operational consequences of multi-VPS
 

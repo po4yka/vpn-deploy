@@ -1,0 +1,11 @@
+[Unit]
+Description=Run VPN watchdog every {{ watchdog.interval }}
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ watchdog.interval }}
+RandomizedDelaySec=30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,19 @@
+---
+- name: Verify firewall role
+  hosts: all
+  become: true
+  tasks:
+    - name: nftables.conf parses
+      ansible.builtin.command:
+        cmd: nft -c -f /etc/nftables.conf
+      changed_when: false
+
+    - name: nftables config mentions expected ports
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q 'tcp dport 443' /etc/nftables.conf
+          grep -q 'tcp dport 22'  /etc/nftables.conf
+          grep -q 'udp dport 443' /etc/nftables.conf
+        executable: /bin/bash
+      changed_when: false

@@ -43,6 +43,10 @@
       when: vpn.enable_monitoring | default(true)
       tags: [monitoring]
 
+    - role: watchdog
+      when: vpn.enable_watchdog | default(true)
+      tags: [watchdog, monitoring]
+
     - role: backup
       when: vpn.enable_backup | default(true)
       tags: [backup]

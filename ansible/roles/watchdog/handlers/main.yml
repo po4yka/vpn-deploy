@@ -1,0 +1,9 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Restart watchdog timer
+  ansible.builtin.systemd_service:
+    name: vpn-watchdog.timer
+    state: restarted

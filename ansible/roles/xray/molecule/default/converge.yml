@@ -1,0 +1,85 @@
+---
+- name: Converge xray role (template-only, no real binary download)
+  hosts: all
+  become: true
+  vars:
+    xray_port: 443
+    nginx_xhttp_port: 8443
+    vpn:
+      enable_nginx_xhttp: true
+    xray:
+      version: "v26.3.27"
+      linux_amd64_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+      reality_private_key: "MOLECULE_TEST_PRIVATE_KEY_NOT_REAL"
+      target: "www.cloudflare.com:443"
+      server_names:
+        - "www.cloudflare.com"
+      xhttp_path: "/test"
+      clients:
+        - name: alice
+          uuid: "11111111-1111-1111-1111-111111111111"
+          short_id: "deadbeef"
+        - name: bob
+          uuid: "22222222-2222-2222-2222-222222222222"
+          short_id: "cafebabe"
+  pre_tasks:
+    - name: Create xray user
+      ansible.builtin.user:
+        name: xray
+        system: true
+        shell: /usr/sbin/nologin
+        home: /var/lib/xray
+        create_home: true
+
+    - name: Stub xray binary at /usr/local/bin/xray (so validate doesn't fail)
+      ansible.builtin.copy:
+        dest: /usr/local/bin/xray
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          # Stub for molecule. Accepts `run -test -config <path>` and exits 0
+          # if file exists.
+          if [ "$1" = "run" ] && [ "$2" = "-test" ]; then
+            shift 2
+            while [ $# -gt 0 ]; do
+              if [ "$1" = "-config" ]; then
+                test -f "$2" && exit 0 || exit 1
+              fi
+              shift
+            done
+          fi
+          if [ "$1" = "version" ]; then
+            echo "Xray STUB v26.3.27 (molecule)"
+            exit 0
+          fi
+          exit 0
+
+    - name: Pre-create release dir so role's get_url+unarchive can be skipped
+      ansible.builtin.file:
+        path: /opt/xray/releases/v26.3.27
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Stub xray binary in release dir
+      ansible.builtin.copy:
+        dest: /opt/xray/releases/v26.3.27/xray
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          exit 0
+
+  tasks:
+    # Render templates only; skip download/unarchive tasks.
+    - name: Run xray role with download skipped
+      ansible.builtin.include_role:
+        name: xray
+      vars:
+        # Force the get_url task to find the file already there
+        xray_arch: "64"
+        xray_sha256: "0000000000000000000000000000000000000000000000000000000000000000"

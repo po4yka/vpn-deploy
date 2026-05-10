@@ -1,0 +1,57 @@
+---
+# Local watchdog: probes every enabled transport on a 5-minute timer and
+# pushes an alert via ntfy.sh / Pushover after N consecutive failures.
+
+- name: Ensure watchdog state directory
+  ansible.builtin.file:
+    path: /var/lib/vpn-watchdog
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Drop watchdog probe script
+  ansible.builtin.template:
+    src: vpn-watchdog.sh.j2
+    dest: /usr/local/sbin/vpn-watchdog.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Drop watchdog environment file
+  ansible.builtin.template:
+    src: vpn-watchdog.env.j2
+    dest: /etc/vpn-watchdog.env
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+  notify: Restart watchdog timer
+
+- name: Install watchdog systemd service
+  ansible.builtin.template:
+    src: vpn-watchdog.service.j2
+    dest: /etc/systemd/system/vpn-watchdog.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Install watchdog systemd timer
+  ansible.builtin.template:
+    src: vpn-watchdog.timer.j2
+    dest: /etc/systemd/system/vpn-watchdog.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart watchdog timer
+
+- name: Enable watchdog timer
+  ansible.builtin.systemd_service:
+    name: vpn-watchdog.timer
+    enabled: true
+    state: started
+    daemon_reload: true

@@ -44,6 +44,13 @@ venv/
 __pycache__/
 *.pyc
 
+# Molecule
+**/molecule/**/.molecule/
+**/molecule/**/__pycache__/
+
+# Operator-side artifacts (not for git)
+state-backups/
+
 # OS
 .DS_Store
 Thumbs.db
