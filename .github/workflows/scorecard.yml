@@ -22,6 +22,12 @@ jobs:
   analysis:
     name: scorecard analysis
     runs-on: ubuntu-24.04
+    # OSSF Scorecard targets public OSS supply-chain trust. On private repos
+    # GITHUB_TOKEN's graphql scope can't run the queries Scorecard expects
+    # (`ListCommits` returns "Resource not accessible by integration") and
+    # the public registry rejects publishes. Skip until the repo is public;
+    # the workflow self-activates on that transition.
+    if: ${{ github.event.repository.visibility == 'public' }}
     permissions:
       contents: read
       actions: read
@@ -37,6 +43,8 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
+          # Public registry only accepts public-repo results; this job
+          # already gates on visibility.
           publish_results: true
           # Optional: set SCORECARD_TOKEN for richer checks (BranchProtection,
           # Webhooks). Falls back to GITHUB_TOKEN when absent.
