@@ -4,6 +4,9 @@
     daemon_reload: true
 
 - name: Restart hysteria
+  # Handler `block:` does not register the wrapper name as a handler in
+  # ansible-core 2.18+, so notify uses `listen:` to dispatch by topic.
+  listen: Restart hysteria
   block:
     - name: Restart hysteria-server
       ansible.builtin.systemd_service:
