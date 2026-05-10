@@ -14,7 +14,6 @@ Doesn't substitute for molecule; it's a fast pre-flight.
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -22,7 +21,7 @@ import tempfile
 from pathlib import Path
 
 import yaml
-from jinja2 import Environment, FileSystemLoader, StrictUndefined, UndefinedError
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, UndefinedError, select_autoescape
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ROLES_DIR = REPO_ROOT / "ansible" / "roles"
@@ -84,6 +83,7 @@ def render_template(path: Path, vars_: dict) -> str:
         loader=FileSystemLoader(str(path.parent)),
         undefined=StrictUndefined,
         keep_trailing_newline=True,
+        autoescape=select_autoescape(),
     )
     # Polyfills for Ansible-only filters/tests we use.
     env.filters["to_json"] = lambda v: json.dumps(v)
