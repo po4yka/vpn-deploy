@@ -51,6 +51,10 @@
     name: systemd-timesyncd
     enabled: true
     state: started
+  register: baseline_timesync
+  changed_when: >-
+    baseline_timesync.changed and
+    ansible_virtualization_type | default("") != "docker"
 
 - name: Ensure sshd drop-in directory exists
   ansible.builtin.file:
