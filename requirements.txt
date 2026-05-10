@@ -4,3 +4,8 @@ jmespath==1.1.0
 molecule==26.4.0
 molecule-plugins[docker]==25.8.12
 yamllint==1.38.0
+
+# Used by validators in CI (scripts/check-secrets-coverage.py +
+# scripts/check-templates-render.py).
+PyYAML==6.0.2
+Jinja2==3.1.4
