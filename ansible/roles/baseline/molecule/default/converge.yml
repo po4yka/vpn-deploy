@@ -1,16 +1,19 @@
 ---
 - name: Converge baseline role
   hosts: all
+  # Connect as the user molecule.yml put in host_vars (root). Don't pin
+  # ansible_user here — overriding it forces the very first connect to use
+  # a user that doesn't exist yet, so pre_tasks (which create that user)
+  # can never run.
   become: true
   vars:
-    ansible_user: deploy
     vpn:
       enable_xray_reality: true
       enable_nginx_xhttp: true
       enable_hysteria: false
       enable_amneziawg: false
   pre_tasks:
-    - name: Create deploy user (the role assumes it via cloud-init normally)
+    - name: Create deploy user (mirrors what cloud-init does in prod)
       ansible.builtin.user:
         name: deploy
         groups: sudo
