@@ -15,6 +15,9 @@
       - rsync
       - htop
       - dnsutils
+      # openssh-server is what `sshd` lives in. The hardening drop-in below
+      # uses `validate: sshd -t -f %s`, which needs the binary present.
+      - openssh-server
     state: present
     update_cache: true
     cache_valid_time: 3600

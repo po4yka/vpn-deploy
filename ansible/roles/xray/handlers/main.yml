@@ -3,47 +3,30 @@
   ansible.builtin.systemd_service:
     daemon_reload: true
 
-- name: Restart xray
-  # Handler `block:` does not register the wrapper name as a handler in
-  # ansible-core 2.18+, so notify uses `listen:` to dispatch by topic.
+# Notify topic: "Restart xray" — three steps run in order via `listen`.
+# Handlers cannot use block/rescue, so the bad-config rollback used to live
+# here lives upstream now: tasks/main.yml validates the rendered config via
+# `xray run -test` before writing it, so we never ship a broken config to
+# the restart path.
+
+- name: Test Xray config before restart
+  ansible.builtin.command:
+    cmd: /usr/local/bin/xray run -test -config {{ xray_etc_dir }}/config.json
+  changed_when: false
   listen: Restart xray
-  block:
-    - name: Test Xray config before restart
-      ansible.builtin.command:
-        cmd: /usr/local/bin/xray run -test -config {{ xray_etc_dir }}/config.json
-      changed_when: false
 
-    - name: Restart Xray
-      ansible.builtin.systemd_service:
-        name: xray
-        state: restarted
+- name: Restart Xray
+  ansible.builtin.systemd_service:
+    name: xray
+    state: restarted
+  listen: Restart xray
 
-    - name: Wait for Xray service to become active
-      ansible.builtin.command:
-        cmd: systemctl is-active xray
-      register: xray_active
-      retries: 5
-      delay: 2
-      until: xray_active.stdout == "active"
-      changed_when: false
-
-  rescue:
-    - name: Restore previous Xray config
-      ansible.builtin.copy:
-        src: "{{ xray_etc_dir }}/config.json.prev"
-        dest: "{{ xray_etc_dir }}/config.json"
-        remote_src: true
-        owner: root
-        group: "{{ xray_runtime_group }}"
-        mode: "0640"
-      ignore_errors: true
-
-    - name: Restart Xray after rollback
-      ansible.builtin.systemd_service:
-        name: xray
-        state: restarted
-      ignore_errors: true
-
-    - name: Fail deployment after rollback attempt
-      ansible.builtin.fail:
-        msg: "Xray restart failed; previous config was restored if available."
+- name: Wait for Xray service to become active
+  ansible.builtin.command:
+    cmd: systemctl is-active xray
+  register: xray_active
+  retries: 5
+  delay: 2
+  until: xray_active.stdout == "active"
+  changed_when: false
+  listen: Restart xray
