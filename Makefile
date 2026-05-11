@@ -15,7 +15,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
         molecule-test smoke-test validate-target scan-targets blue-green \
         spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
-        audit-permissions
+        audit-permissions asn-drift
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -58,6 +58,7 @@ help:
 	@echo "  emit-qr CLIENT=…     PNG QR for the client (TYPE=singbox|uri, OUT=path)"
 	@echo "  check-certs          Cert hygiene: SAN, expiry, self-signed, modulus match"
 	@echo "  audit-permissions    Local FS audit: age key 0600, no stray plaintext, etc."
+	@echo "  asn-drift            Detect ASN drift on the deployed VPS IP, alert via ntfy"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
@@ -198,6 +199,9 @@ check-certs:
 
 audit-permissions:
 	./scripts/audit-permissions.sh
+
+asn-drift:
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/asn-drift.sh
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
