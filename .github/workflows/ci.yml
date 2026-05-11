@@ -203,3 +203,59 @@ jobs:
         run: pip install --require-hashes --no-deps -r requirements.txt
       - name: yamllint
         run: yamllint -c .yamllint.yml .
+
+  unit-tests:
+    name: pytest unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+      - name: Install pinned tooling
+        run: pip install --require-hashes --no-deps -r requirements.txt
+      - name: Install pytest (test-only, version-pinned)
+        run: pip install pytest==8.4.0
+      - name: pytest tests/unit/
+        run: python3 -m pytest tests/unit/ -v
+
+  snapshot:
+    name: jinja snapshot diff
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+      - name: Install pinned tooling
+        run: pip install --require-hashes --no-deps -r requirements.txt
+      - name: render-snapshots check
+        run: python3 scripts/render-snapshots.py
+
+  validate-schema:
+    name: secrets schema (lenient on example)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+      - name: Install pinned tooling
+        run: pip install --require-hashes --no-deps -r requirements.txt
+      - name: validate-secrets (lenient on example schema)
+        run: python3 scripts/validate-secrets.py
+
+  tf-test:
+    name: terraform test (mock_provider)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85  # v4
+        with:
+          terraform_version: "1.15.2"
+      - name: terraform init -backend=false
+        working-directory: terraform/providers/upcloud
+        run: terraform init -backend=false
+      - name: terraform test
+        working-directory: terraform/providers/upcloud
+        run: terraform test

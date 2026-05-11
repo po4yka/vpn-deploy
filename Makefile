@@ -23,7 +23,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         setup-yubikey check-killswitch install-operator-crons \
         remove-operator-crons issue-sub-token sub-reads \
         test-unit snapshot-check snapshot-update validate-secrets \
-        tf-test
+        tf-test ci-fast
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -104,6 +104,7 @@ help:
 	@echo "  snapshot-update            Refresh the goldens (run after intentional change)"
 	@echo "  validate-secrets           jsonschema check (strict if SECRETS_FILE is set)"
 	@echo "  tf-test                    terraform test (mock_provider; needs TF 1.6+)"
+	@echo "  ci-fast                    Cheap pre-PR bundle: unit + snapshot + schema + render + syntax"
 	@echo "  molecule-test ROLE=<name>  Run one role's molecule scenario"
 	@echo "  molecule-full-stack        site.yml end-to-end inside a Docker container"
 
@@ -231,6 +232,26 @@ validate-secrets:
 
 tf-test:
 	@cd $(TF_ROOT) && terraform init -backend=false >/dev/null && terraform test
+
+# Cheap-to-run bundle for operators to run before pushing a PR. Mirrors
+# the equivalent jobs on .github/workflows/ci.yml so a passing local
+# run means a passing remote ci-fast (modulo molecule which is too slow
+# for this gate — run `make molecule-test ROLE=<name>` for that). The
+# ansible-syntax step is skipped (with a warning) on boxes without
+# ansible-playbook on PATH; CI always has it.
+ci-fast:
+	@echo "== render check =="; python3 scripts/check-templates-render.py
+	@echo "== secrets coverage =="; python3 scripts/check-secrets-coverage.py
+	@echo "== snapshot diff =="; python3 scripts/render-snapshots.py
+	@echo "== schema validation =="; python3 scripts/validate-secrets.py
+	@if command -v ansible-playbook >/dev/null 2>&1; then \
+	  echo "== ansible syntax =="; \
+	  cd $(ANSIBLE_DIR) && ansible-playbook playbooks/site.yml --syntax-check -i 'localhost,'; \
+	else \
+	  echo "== ansible syntax == (skipped: ansible-playbook not on PATH)"; \
+	fi
+	@echo "== unit tests =="; python3 -m pytest tests/unit/ -q
+	@echo "ci-fast: OK"
 
 molecule-test:
 	@test -n "$(ROLE)" || { echo "ROLE=<role-name> required (e.g. baseline, firewall, xray)"; exit 1; }

@@ -6,11 +6,12 @@ molecule-plugins[docker]==25.8.12
 yamllint==1.38.0
 
 # Used by validators in CI (scripts/check-secrets-coverage.py +
-# scripts/check-templates-render.py).
+# scripts/check-templates-render.py +
+# scripts/validate-secrets.py — which uses the jsonschema pulled
+# transitively by ansible-lint, no explicit pin here).
 PyYAML==6.0.3
 Jinja2==3.1.6
 
-# Test layer (pytest unit + snapshot + terraform); molecule already
-# pulls in pytest transitively but we pin the floor here.
-pytest==8.4.0
-jsonschema==4.23.0
+# pytest is NOT pinned here — it's not part of the deploy runtime;
+# the ci-fast job installs pytest separately with an explicit
+# version, so Scorecard's pinned-dependencies rule still passes.
