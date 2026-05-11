@@ -11,6 +11,7 @@ TFPLAN        := $(TF_ROOT)/$(ENV).tfplan
 export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
 
 .PHONY: help init validate plan apply inventory wait decrypt dry-run deploy verify clean \
+        pre-deploy-check \
         rollback-xray rollback-config rotate-credentials check-prereqs \
         destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
         molecule-test smoke-test validate-target scan-targets blue-green \
@@ -39,7 +40,9 @@ help:
 	@echo "  wait           wait for cloud-init to finish"
 	@echo "  dry-run        ansible-playbook --check --diff"
 	@echo "  deploy         ansible-playbook site.yml"
-	@echo "  verify         ansible-playbook verify.yml"
+	@echo "  verify         ansible-playbook verify.yml (after pre-deploy-check)"
+	@echo "  pre-deploy-check  spot-check-secrets + check-certs (auto-runs before deploy/verify)"
+	@echo "                    bypass via SKIP_PRECHECK=1"
 	@echo "  clean          shred $(SECRETS_FILE)"
 	@echo ""
 	@echo "  rollback-xray ROLLBACK_XRAY_VERSION=vX.Y.Z"
@@ -119,17 +122,24 @@ inventory:
 wait:
 	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/wait-cloud-init.sh
 
-dry-run:
+pre-deploy-check:
 	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
+	@if [ "$(SKIP_PRECHECK)" = "1" ]; then \
+	  echo "pre-deploy-check: skipped (SKIP_PRECHECK=1)"; \
+	else \
+	  VPN_SECRETS_FILE=$(SECRETS_FILE) python3 ./scripts/spot-check-secrets.py && \
+	  VPN_SECRETS_FILE=$(SECRETS_FILE) ./scripts/check-certs.sh; \
+	fi
+
+dry-run: pre-deploy-check
 	VPN_SECRETS_FILE=$(SECRETS_FILE) \
 	ansible-playbook $(ANSIBLE_DIR)/playbooks/site.yml --check --diff
 
-deploy:
-	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
+deploy: pre-deploy-check
 	VPN_SECRETS_FILE=$(SECRETS_FILE) \
 	ansible-playbook $(ANSIBLE_DIR)/playbooks/site.yml
 
-verify:
+verify: pre-deploy-check
 	VPN_SECRETS_FILE=$(SECRETS_FILE) \
 	ansible-playbook $(ANSIBLE_DIR)/playbooks/verify.yml
 	@if [ "$(TAG_ON_SUCCESS)" = "1" ]; then \
