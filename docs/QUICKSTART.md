@@ -94,6 +94,30 @@ cp secrets/prod.secrets.example.yaml ~/.config/vpn-provision/prod.secrets.yaml
 $EDITOR ~/.config/vpn-provision/prod.secrets.yaml
 ```
 
+### 4a. Pick a REALITY target
+
+There is no safe default for `xray.target` — see the inline criteria in
+the secrets schema and `docs/CDN-DECISION.md`. Two helpers narrow the
+search:
+
+```bash
+# Discover candidates inside a CIDR or by crawling a public mirror list.
+make scan-targets CIDR=107.172.103.0/24
+make scan-targets CRAWL=https://launchpad.net/ubuntu/+archivemirrors
+
+# Re-validate any candidate end-to-end (8 steps including ASN cross-check).
+TARGET=mirror.example.com:443 SERVER_NAMES=mirror.example.com \
+  ./scripts/validate-reality-target.sh
+```
+
+`scan-targets` is a wrapper around [XTLS/RealiTLScanner](https://github.com/XTLS/RealiTLScanner)
+pinned at v0.2.1 with a sha256 check. It runs **on your workstation,
+never on the VPS** (the upstream README is explicit that running the
+scanner in the cloud may flag the VPS). The wrapper drops over-template
+domains and demotes candidates in the "Avoid" ASN tier
+(`docs/PROVIDER-NOTES.md`); export `VPS_ASN=<int>` to additionally
+demote any candidate whose ASN does not match the VPS.
+
 Fill: Xray version + sha256 (from the GitHub release page), REALITY keypair
 from step 2c, target+server_names (validate with `make validate-target`),
 nginx_xhttp cert/key (your public CA cert for `vpn.example.com`), Hysteria
