@@ -68,6 +68,37 @@ FAILS="$(echo "$RESULT" | jq '[to_entries[]
 echo "burn-check: ${PROVIDER}/${ENV} ${IP}:443  →  ${TOTAL} nodes probed, ${FAILS} failed"
 echo "$RESULT" | jq -r 'to_entries[] | "  \(.key): \(.value // "pending")"'
 
+# Optional Prometheus textfile export. When NODE_EXPORTER_TEXTFILE_DIR is
+# set, write {dir}/vpn_burn.prom with one gauge per node and a summary.
+# Atomic write: tmp + mv per the textfile-collector contract.
+if [[ -n "${NODE_EXPORTER_TEXTFILE_DIR:-}" ]]; then
+  out="${NODE_EXPORTER_TEXTFILE_DIR%/}/vpn_burn.prom"
+  tmp="${out}.tmp.$$"
+  {
+    echo "# HELP vpn_burn_total_nodes Number of vantage points probed"
+    echo "# TYPE vpn_burn_total_nodes gauge"
+    echo "vpn_burn_total_nodes{provider=\"${PROVIDER}\",env=\"${ENV}\"} ${TOTAL}"
+    echo "# HELP vpn_burn_failed_nodes Number of probes that did not connect"
+    echo "# TYPE vpn_burn_failed_nodes gauge"
+    echo "vpn_burn_failed_nodes{provider=\"${PROVIDER}\",env=\"${ENV}\"} ${FAILS}"
+    echo "# HELP vpn_burn_reachable Whether the VPS public port appears reachable per node (1 OK / 0 failed)"
+    echo "# TYPE vpn_burn_reachable gauge"
+    echo "$RESULT" | jq -r --arg p "$PROVIDER" --arg e "$ENV" '
+      to_entries[]
+      | .key as $node
+      | (.value // [[]])[0] // []
+      | (.[0] // {})
+      | (if (.address // null) != null and (.error // null) == null then 1 else 0 end) as $ok
+      | "vpn_burn_reachable{provider=\"\($p)\",env=\"\($e)\",node=\"\($node)\"} \($ok)"
+    '
+    echo "# HELP vpn_burn_last_run_unixtime Last time burn-check ran"
+    echo "# TYPE vpn_burn_last_run_unixtime gauge"
+    echo "vpn_burn_last_run_unixtime{provider=\"${PROVIDER}\",env=\"${ENV}\"} $(date +%s)"
+  } > "$tmp"
+  mv "$tmp" "$out"
+  chmod 0644 "$out"
+fi
+
 if (( FAILS >= FAIL_THRESHOLD )); then
   echo "FAIL: ${FAILS} of ${TOTAL} nodes could not reach ${IP}:443 — IP may be burned" >&2
   exit 1
