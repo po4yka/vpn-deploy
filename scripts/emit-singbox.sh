@@ -173,6 +173,7 @@ for i in "${!host_pairs[@]}"; do
   enable_reality="$(toggle_enabled "$vpn_json" enable_xray_reality true)"
   enable_xhttp="$(toggle_enabled "$vpn_json" enable_nginx_xhttp true)"
   enable_hysteria="$(toggle_enabled "$vpn_json" enable_hysteria false)"
+  flow_mode="$(jq -r '.xray_flow_mode // "vision"' <<< "$vpn_json")"
   xray_server_port="$(jq -r '.xray_port // 443' <<< "$host_json")"
   xhttp_server_port="$(jq -r '.nginx_xhttp_public_port // 443' <<< "$host_json")"
   hysteria_server_port="$(jq -r '.hysteria_port // 443' <<< "$host_json")"
@@ -195,16 +196,29 @@ for i in "${!host_pairs[@]}"; do
       echo "enabled REALITY profile is missing xray.reality_public_key or xray.server_names in ${sops_file}" >&2
       exit 1
     fi
-    OUTBOUNDS="$(echo "$OUTBOUNDS" | jq \
-      --arg tag "p0-reality-${tag_prefix}" \
-      --arg ip "$server_ip" --arg uuid "$uuid" \
-      --arg sni "$sni" --arg pk "$reality_pubkey" --arg sid "$short_id" \
-      --argjson port "$xray_server_port" \
-      '. += [{type:"vless", tag:$tag, server:$ip, server_port:$port, uuid:$uuid,
-              flow:"xtls-rprx-vision",
-              tls:{enabled:true, server_name:$sni,
-                   utls:{enabled:true, fingerprint:"chrome"},
-                   reality:{enabled:true, public_key:$pk, short_id:$sid}}}]')"
+    if [[ "$flow_mode" == "mux" ]]; then
+      OUTBOUNDS="$(echo "$OUTBOUNDS" | jq \
+        --arg tag "p0-reality-${tag_prefix}" \
+        --arg ip "$server_ip" --arg uuid "$uuid" \
+        --arg sni "$sni" --arg pk "$reality_pubkey" --arg sid "$short_id" \
+        --argjson port "$xray_server_port" \
+        '. += [{type:"vless", tag:$tag, server:$ip, server_port:$port, uuid:$uuid,
+                multiplex:{enabled:true, protocol:"smux", max_streams:8},
+                tls:{enabled:true, server_name:$sni,
+                     utls:{enabled:true, fingerprint:"chrome"},
+                     reality:{enabled:true, public_key:$pk, short_id:$sid}}}]')"
+    else
+      OUTBOUNDS="$(echo "$OUTBOUNDS" | jq \
+        --arg tag "p0-reality-${tag_prefix}" \
+        --arg ip "$server_ip" --arg uuid "$uuid" \
+        --arg sni "$sni" --arg pk "$reality_pubkey" --arg sid "$short_id" \
+        --argjson port "$xray_server_port" \
+        '. += [{type:"vless", tag:$tag, server:$ip, server_port:$port, uuid:$uuid,
+                flow:"xtls-rprx-vision",
+                tls:{enabled:true, server_name:$sni,
+                     utls:{enabled:true, fingerprint:"chrome"},
+                     reality:{enabled:true, public_key:$pk, short_id:$sid}}}]')"
+    fi
   fi
 
   # P1 XHTTP via nginx.

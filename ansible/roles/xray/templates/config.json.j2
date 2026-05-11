@@ -14,6 +14,7 @@
     "tag": "dns-inbound"
   },
   "inbounds": [
+    {%- set flow_mode = vpn.xray_flow_mode | default('vision') %}
     {
       "tag": "vless-reality",
       "listen": "0.0.0.0",
@@ -24,7 +25,9 @@
           {%- for client in xray.clients %}
           {
             "id": "{{ client.uuid }}",
+            {%- if flow_mode == 'vision' %}
             "flow": "xtls-rprx-vision",
+            {%- endif %}
             "email": "{{ client.name }}"
           }{% if not loop.last %},{% endif %}
           {%- endfor %}

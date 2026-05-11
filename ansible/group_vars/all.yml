@@ -15,6 +15,28 @@ vpn:
   enable_backup: true
   enable_subscription_host: false # opt-in; not in v1 default deploy
 
+  # P0 flow mode — switches the VLESS+REALITY inbound between two shapes:
+  #   vision (default) — `xtls-rprx-vision` flow, no mux. Best on
+  #                       networks not policing per-IP TLS concurrency.
+  #   mux              — drops vision-flow, enables mux on the inbound.
+  #                       Use on home ISPs hitting the ~12-concurrent-TLS
+  #                       rule documented in tls-policing-home-isps
+  #                       (MTS/MGTS/RTK Izhevsk/JustLan/LanInterCom; 50+
+  #                       ASNs as of 2026-05). The block lasts 60-120 s
+  #                       after the threshold is crossed; mux holds
+  #                       concurrent TLS sessions below the threshold by
+  #                       multiplexing application streams over fewer
+  #                       physical TLS connections.
+  # To disable the P0 listener entirely, set enable_xray_reality: false
+  # and rely on enable_nginx_xhttp for transport.
+  xray_flow_mode: vision
+
+  # Optional Xray Finalmask obfuscation (Sudoku) on the P0 inbound.
+  # Disabled by default — turning it on changes the byte distribution
+  # signature, so flip it only after a target network stops accepting
+  # the vanilla REALITY shape.
+  xray_finalmask: false
+
 # nftables policy
 allowed_ssh_cidrs: []  # populated from terraform tfvars; see render-inventory.sh
 
