@@ -13,7 +13,8 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
 .PHONY: help init validate plan apply inventory wait decrypt dry-run deploy verify clean \
         rollback-xray rollback-config rotate-credentials check-prereqs \
         destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
-        molecule-test smoke-test validate-target scan-targets blue-green
+        molecule-test smoke-test validate-target scan-targets blue-green \
+        spot-check-secrets bootstrap-secrets
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -50,6 +51,8 @@ help:
 	@echo "  smoke-test        End-to-end traffic test through every enabled profile"
 	@echo "  validate-target   Pre-deploy probe of REALITY target (TLS/H2/SAN/uTLS/ASN)"
 	@echo "  scan-targets {SEEDS=…|CIDR=…|CRAWL=…}  Discover REALITY targets via RealiTLScanner"
+	@echo "  bootstrap-secrets …  Generate full crypto + SOPS-encrypt for a fresh env"
+	@echo "  spot-check-secrets   Audit decrypted secrets for placeholders + cert health"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
@@ -158,6 +161,21 @@ smoke-test:
 validate-target:
 	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
 	SOPS_FILE=$(SOPS_FILE) ENV=$(ENV) ./scripts/validate-reality-target.sh
+
+bootstrap-secrets:
+	@test -n "$(TARGET)$(SERVER_NAME)" || { \
+	  echo "usage: make bootstrap-secrets TARGET=mirror.example.com:443 SERVER_NAME=mirror.example.com"; \
+	  echo "  optional: CLIENTS=phone,laptop ENV=prod XHTTP_HOST=vpn.example.com"; \
+	  exit 1; }
+	./scripts/bootstrap-secrets.sh \
+	  $(if $(ENV),--env $(ENV)) \
+	  $(if $(CLIENTS),--clients $(CLIENTS)) \
+	  --target $(TARGET) --server-name $(SERVER_NAME) \
+	  $(if $(XHTTP_HOST),--xhttp-host $(XHTTP_HOST))
+
+spot-check-secrets:
+	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
+	VPN_SECRETS_FILE=$(SECRETS_FILE) python3 ./scripts/spot-check-secrets.py
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
