@@ -1,0 +1,28 @@
+---
+# WARP outbound — installs Cloudflare WARP CLI on the host and registers
+# it in WARP+DoH mode. Xray's routing rules can then send selected
+# upstream traffic via the WARP exit, splitting the dual-role flow that
+# would otherwise mark our VPS as both ingress and egress on the same IP.
+#
+# Off by default. When enabled, the xray role consults
+# `warp_outbound.routing_tag` and `warp_outbound.routing_outbound_ip`
+# when building the routing block. Today this is a server-side install
+# only; the xray template integration is the next layer.
+
+warp_outbound:
+  # CLI install: package "cloudflare-warp" via Cloudflare's apt repo on
+  # Debian/Ubuntu. Set to false to skip install on systems that already
+  # have warp-cli or wgcf provisioned out of band.
+  install_warp_cli: true
+
+  # WARP mode. "warp+doh" tunnels everything; "proxy" exposes a SOCKS5
+  # listener on 127.0.0.1:40000 that Xray can target as an outbound.
+  # We default to proxy mode so Xray (not the whole host) routes through
+  # WARP. Whole-host warp mode would also reroute SSH egress and
+  # interfere with restic / monitoring outbound.
+  mode: proxy
+  socks_port: 40000
+
+  # Tag the WARP outbound under this name when xray builds routing
+  # rules. Operators can match on this tag in custom routing.
+  routing_tag: warp-out
