@@ -82,6 +82,9 @@
         "xhttpSettings": {
           "path": "{{ xray.xhttp_path | default('/app-sync') }}",
           "mode": "{{ xray.xhttp_mode | default('auto') }}"
+        },
+        "sockopt": {
+          "trustedXForwardedFor": ["127.0.0.1"]
         }
       },
       "sniffing": {
