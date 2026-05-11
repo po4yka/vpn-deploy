@@ -1,4 +1,8 @@
-listen: :{{ hysteria_port | default(443) }}
+{% if hysteria_port_range | default('') %}
+listen: ":{{ hysteria_port | default(443) }},{{ hysteria_port_range }}"
+{% else %}
+listen: ":{{ hysteria_port | default(443) }}"
+{% endif %}
 
 tls:
   cert: {{ hysteria_config_dir }}/server.fullchain.pem

@@ -40,7 +40,11 @@ table inet filter {
 
 {% if vpn.enable_hysteria | default(false) %}
     # P2 — Hysteria2 UDP
-    udp dport 443 accept
+    udp dport {{ hysteria_port | default(443) }} accept
+{% if hysteria_port_range | default('') %}
+    # P2 — Hysteria2 port-hopping range
+    udp dport {{ hysteria_port_range }} accept
+{% endif %}
 {% endif %}
 
 {% if vpn.enable_amneziawg | default(false) %}
