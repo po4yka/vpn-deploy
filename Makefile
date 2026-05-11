@@ -17,7 +17,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
         audit-permissions asn-drift check-ip-reputation issue-bootstrap \
         test-tls-policing fleet-status drift-since-tag fleet-rotate \
-        watch-spare promote-spare
+        watch-spare promote-spare probing-summary
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -69,6 +69,7 @@ help:
 	@echo "  fleet-rotate PLAN=…      Coordinated rotation across the fleet (--dry-run / --resume)"
 	@echo "  watch-spare              Cron: probe blue, push OTP-gated promote alert on failure"
 	@echo "  promote-spare OTP=…      Consume the pending OTP and swing traffic to GREEN_ENV"
+	@echo "  probing-summary          7-day Xray/nginx/honeypot rollup as Markdown + .prom"
 	@echo "  verify TAG_ON_SUCCESS=1  Tag current commit as vpn-deploy-known-good-* after verify"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
@@ -250,6 +251,9 @@ watch-spare:
 promote-spare:
 	@test -n "$(OTP)" || { echo "usage: make promote-spare OTP=<value>"; exit 1; }
 	PROVIDER=$(PROVIDER) BLUE_ENV=$(ENV) ./scripts/promote-spare.sh $(OTP)
+
+probing-summary:
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/probing-summary.sh
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
