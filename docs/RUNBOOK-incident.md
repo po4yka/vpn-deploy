@@ -7,19 +7,26 @@ symptom; cross-reference the linked runbook for the recovery procedure.
 
 | Symptom | Likely cause | Action |
 |---|---|---|
-| Single client URI leaked / device lost | Per-device | `RUNBOOK-rotate.md` § 1 |
+| Single client URI leaked / device lost | Per-device | `RUNBOOK-rotate.md` § 1; record via `make audit-log-append ACTION=revoke-client CLIENT=…` |
 | REALITY private key leaked | Server-wide | `RUNBOOK-rotate.md` § 2, then reissue every client |
-| Subscription URL leaked publicly | Token | add the leaked token to `subscription.revoked_tokens`, run `make deploy`; reissue via `scripts/new-client.sh` |
-| TLS handshake to VPS fails from many networks at once | IP burned | run `make burn-check` to confirm; then blue-green to new VPS, different ASN if possible |
-| Slow / lossy on one network only, fine elsewhere | Routing / ISP-specific | first try `Hysteria2` fallback; if persistent, blue-green to different region |
-| `xray run -test -config` fails after deploy | Config bug | `RUNBOOK-rollback.md` § 1 (config rollback, automatic via handler rescue) |
+| Subscription URL leaked publicly | Token | add the leaked token to `subscription.revoked_tokens`, run `make deploy`; reissue via `make issue-bootstrap CLIENT=… --expires DATE` |
+| Bootstrap URL leaked before client fetched | Token | re-issue with `make issue-bootstrap CLIENT=… --expires DATE` (old token returns 410 on first GET) |
+| TLS handshake to VPS fails from many networks | IP burned | `make burn-check` confirms; warm-spare → `make promote-spare OTP=…` (if pre-provisioned), else blue-green to new ASN |
+| Slow / lossy on one network only, fine elsewhere | Routing / ISP-specific | try Hysteria2 fallback; if persistent, blue-green to different region; for the RU home-ISP TLS-policing rule run `make test-tls-policing HOST=…` then flip the cohort to `xray_flow_mode: mux` |
+| `xray run -test -config` fails after deploy | Config bug | `RUNBOOK-rollback.md` § 1 (config rollback, automatic via handler rescue); `make drift-since-tag` shows what changed since last known-good |
 | New Xray release crashes / leaks | Binary | `RUNBOOK-rollback.md` § 2 (binary rollback) |
-| Operator workstation compromised | Operator | rotate SSH key + age key + REALITY key + restic password; full credential rotation |
+| watchdog alerts with `class=active_probing` | TSPU probing wave | `make probing-summary` for the rollup; enable `vpn.enable_probe_ratelimit` if not already; nothing to do server-side beyond observe |
+| watchdog alerts with `class=tcp_listen_wedge` | Xray hung | `systemctl restart xray`; if recurring, check `vpn.xray_flow_mode` cohort match |
+| watchdog alerts with `class=nginx_403_spike` | Probe/scrape wave | usually benign; if rate climbs, `make check-ip-reputation` to see if IP appeared on a public blocklist |
+| `make asn-drift` alert | Provider IP reassignment | check `docs/PROVIDER-NOTES.md` — if new ASN is in Avoid tier, blue-green now |
+| `make check-ip-reputation` alert | IP on Spamhaus / FireHOL | blue-green or wait out the listing depending on which list and severity score |
+| Operator workstation compromised | Operator | rotate SSH key + age key + REALITY key + restic password; full credential rotation; `make audit-log` shows every issuance from the compromised workstation |
 | Lost SSH access (key deleted) | Operator | see § "Lost SSH access" below |
-| Lost SOPS age private key | Operator | see § "Lost age key" below; if you set up Shamir split (`docs/AGE-RECOVERY.md`), reconstruct from k shares first |
+| Lost SOPS age private key | Operator | see § "Lost age key" below; if Shamir-split (`docs/AGE-RECOVERY.md`) or YubiKey-backed (`docs/SECRETS.md`), reconstruct first |
 | Lost Terraform state file | Operator | see § "State loss" below |
 | 3x-ui / Marzban / Remnawave panel exposed | Architecture deviation | this stack has no panel by design; if you added one, take it offline NOW |
-| Suspected RKN / TSPU active probing | Threat-model | check REALITY target hygiene; rerun `make validate-target`; consider rotating SNI target |
+| Suspected RKN / TSPU active probing | Threat-model | `make probing-summary` for class breakdown; rerun `make validate-target` for SNI hygiene; consider rotating SNI target; check honeypot textfile metrics |
+| TSPU rule-set drift suspected | Threat-model | `make tspu-canary` from an in-cohort RU test client (diff vs yesterday) |
 | Mobile network whitelist rolled out for the operator | Threat-model | P3 reachability — automation can't help; switch network (roaming, fixed broadband) or stand up an in-country relay |
 
 ## Lost SSH access
