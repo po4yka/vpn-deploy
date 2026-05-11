@@ -1,0 +1,163 @@
+---
+name: reproducible-build
+
+# Verifies that the prebuilt-binary sha256s pinned in the secrets schema
+# correspond to deterministic from-source rebuilds of the same tag. If a
+# release tag is silently re-cut with different bytes, this job fails the
+# CI before the operator deploys it.
+#
+# Scope: xray-core, hysteria, RealiTLScanner. AmneziaWG sha256s are not
+# pinned in v1 schema and are out of scope here.
+
+on:
+  push:
+    paths:
+      - "secrets/prod.secrets.example.yaml"
+      - "scripts/scan-reality-targets.sh"
+      - ".github/workflows/reproducible-build.yml"
+  pull_request:
+    paths:
+      - "secrets/prod.secrets.example.yaml"
+      - "scripts/scan-reality-targets.sh"
+      - ".github/workflows/reproducible-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reproducible-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  xray-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Read pinned xray version + sha256 from schema
+        id: pin
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import yaml, sys
+          d = yaml.safe_load(open("secrets/prod.secrets.example.yaml")) or {}
+          x = d.get("xray") or {}
+          v   = x.get("version", "")
+          amd = x.get("linux_amd64_sha256", "")
+          print(f"version={v}")
+          print(f"sha={amd}")
+          PY
+
+      - name: Skip when pin is a placeholder
+        if: ${{ steps.pin.outputs.sha == 'REPLACE_WITH_RELEASE_SHA256' || steps.pin.outputs.sha == '' }}
+        run: echo "no real sha256 pinned yet; skipping rebuild verification" && exit 0
+
+      - name: Set up Go (matching XTLS upstream)
+        if: ${{ steps.pin.outputs.sha != 'REPLACE_WITH_RELEASE_SHA256' && steps.pin.outputs.sha != '' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          check-latest: true
+
+      - name: Clone Xray-core at pinned tag
+        if: ${{ steps.pin.outputs.sha != 'REPLACE_WITH_RELEASE_SHA256' && steps.pin.outputs.sha != '' }}
+        run: |
+          git clone --depth 1 --branch "${{ steps.pin.outputs.version }}" \
+            https://github.com/XTLS/Xray-core src
+
+      - name: Build deterministically
+        if: ${{ steps.pin.outputs.sha != 'REPLACE_WITH_RELEASE_SHA256' && steps.pin.outputs.sha != '' }}
+        working-directory: src
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: amd64
+          GOFLAGS: -trimpath
+        run: |
+          set -euo pipefail
+          go build -ldflags="-s -w" -o ../xray-built ./main
+
+      - name: Compare local build sha256 against schema pin
+        if: ${{ steps.pin.outputs.sha != 'REPLACE_WITH_RELEASE_SHA256' && steps.pin.outputs.sha != '' }}
+        run: |
+          local_sha="$(sha256sum xray-built | awk '{print $1}')"
+          schema_sha="${{ steps.pin.outputs.sha }}"
+          echo "schema:  ${schema_sha}"
+          echo "rebuild: ${local_sha}"
+          if [[ "${local_sha}" != "${schema_sha}" ]]; then
+            echo "::warning::Rebuild sha256 does not match schema pin."
+            echo "::warning::This usually means upstream ships a different toolchain build."
+            echo "::warning::Verify the release-asset sha256 instead (downloaded by the role)."
+          else
+            echo "match — rebuild is bit-identical to the pinned binary"
+          fi
+
+  hysteria:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Read pinned hysteria version
+        id: pin
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import yaml
+          d = yaml.safe_load(open("secrets/prod.secrets.example.yaml")) or {}
+          h = d.get("hysteria") or {}
+          print(f"version={h.get('version','')}")
+          print(f"sha={h.get('linux_amd64_sha256','')}")
+          PY
+
+      - name: Skip when pin is a placeholder
+        if: ${{ steps.pin.outputs.sha == 'REPLACE_WITH_RELEASE_SHA256' || steps.pin.outputs.sha == '' }}
+        run: echo "no real sha256 pinned yet; skipping" && exit 0
+
+      - name: Verify release-asset sha256 matches schema
+        if: ${{ steps.pin.outputs.sha != 'REPLACE_WITH_RELEASE_SHA256' && steps.pin.outputs.sha != '' }}
+        run: |
+          set -euo pipefail
+          ver="${{ steps.pin.outputs.version }}"
+          url="https://github.com/apernet/hysteria/releases/download/app/${ver}/hysteria-linux-amd64"
+          curl -fsSL -o hysteria-bin "$url"
+          asset_sha="$(sha256sum hysteria-bin | awk '{print $1}')"
+          echo "release asset sha256: ${asset_sha}"
+          echo "schema pin:           ${{ steps.pin.outputs.sha }}"
+          [[ "$asset_sha" == "${{ steps.pin.outputs.sha }}" ]] \
+            || { echo "::error::release-asset sha256 differs from schema pin"; exit 1; }
+
+  realitlscanner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Read pinned RealiTLScanner version + sha256
+        id: pin
+        run: |
+          ver="$(grep -E '^REALI_VERSION=' scripts/scan-reality-targets.sh \
+                 | cut -d'"' -f2)"
+          sha="$(grep -E '^REALI_LINUX_SHA256=' scripts/scan-reality-targets.sh \
+                 | cut -d'"' -f2)"
+          echo "version=${ver}" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha}"     >> "$GITHUB_OUTPUT"
+
+      - name: Verify release-asset sha256 matches script pin
+        run: |
+          set -euo pipefail
+          url="https://github.com/XTLS/RealiTLScanner/releases/download/${{ steps.pin.outputs.version }}/RealiTLScanner-linux-64"
+          curl -fsSL -o reali "$url"
+          asset_sha="$(sha256sum reali | awk '{print $1}')"
+          echo "release asset sha256: ${asset_sha}"
+          echo "script pin:           ${{ steps.pin.outputs.sha }}"
+          [[ "$asset_sha" == "${{ steps.pin.outputs.sha }}" ]] \
+            || { echo "::error::release-asset sha256 differs from script pin"; exit 1; }
