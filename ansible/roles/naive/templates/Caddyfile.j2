@@ -12,6 +12,20 @@
 :{{ naive.bind_port }}, {{ naive_secrets.server_name }} {
   tls {{ naive.config_dir }}/server.fullchain.pem {{ naive.config_dir }}/server.key
 
+  # Compression response headers a real Chrome browser triggers. Required
+  # for the NaiveProxy v147 preamble-injection feature to produce
+  # plausible-looking traffic when the client fetches the fronting site
+  # to derive preamble URLs.
+  encode zstd gzip
+
+  # Per-site access log scoped to errors only — keeps per-request URL
+  # paths out of disk logs that would otherwise let an attacker
+  # correlate tunneled traffic to specific upstream domains.
+  log {
+    output file {{ naive.log_dir }}/site-error.log
+    level ERROR
+  }
+
   route {
     forward_proxy {
       basic_auth {{ naive_secrets.username }} {{ naive_secrets.password }}
@@ -24,3 +38,8 @@
     }
   }
 }
+
+# NOTE: NaiveProxy v147.0.7727.49-3 (2026-05) and later inject realistic
+# Chrome HTTP/2 preambles derived from this site's root page. To benefit,
+# clients should run >= v147; older clients still work but lose the
+# preamble-injection cover. See docs/CLIENT-NOTES.md.
