@@ -1,8 +1,19 @@
 # ADR — Cloudflare CDN is not the RU baseline
 
 **Date:** 2026-05-10
+**Last reviewed:** 2026-05-11
 **Status:** accepted
 **Scope:** P1 fallback (`nginx-xhttp` role)
+
+## Evidence anchor
+
+The Cloudflare-via-RU-PoP situation is documented in the censorship-bypass
+wiki page `regime-landscape/wiki/concepts/cloudflare-russian-pop-tspu-blocking`:
+TSPU filters are applied at the Cloudflare ↔ AS1299 (Arelion/Telia) peering
+points inside Russia. Russian Cloudflare PoPs (DME / KJA / LED) carry both
+WARP and CDN traffic, enabling TSPU interception before egress. The
+observed mechanism is SNI + IP blocking with an 8–16 KB byte-threshold cut
+(`/cdn-cgi/trace` passes; full page loads do not).
 
 ## Decision
 
@@ -76,7 +87,8 @@ on `nginx-xhttp`.
 
 Re-evaluate this decision if:
 
-- Cloudflare reverses the RU-PoP-via-TSPU situation.
+- Cloudflare reverses the RU-PoP-via-TSPU situation (re-check the wiki
+  page cited under "Evidence anchor" before flipping this decision).
 - A non-RU CDN provides documented, stable, non-TSPU paths into RU.
 - The threat model changes (e.g., the operator is no longer targeting RU,
   or the operator wants browser camouflage as the dominant property).
