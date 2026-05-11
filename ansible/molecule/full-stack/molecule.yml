@@ -1,0 +1,82 @@
+---
+# Full-stack site.yml run inside a single privileged Docker container.
+# Closes the gap between per-role molecule scenarios and a real deploy:
+# this hits the role ORDERING and the interactions between baseline,
+# firewall, xray, hysteria, nginx-xhttp, and the optional defensive
+# roles. Cheaper than spinning up a UpCloud sub-account per PR.
+#
+# Skipped on purpose:
+#   amneziawg     kernel module + iptables NAT not portable to Docker
+#   warp-outbound Cloudflare WARP installer expects systemd-networkd /
+#                 real DNS; doesn't survive container teardown
+#   backup        restic-against-localhost adds noise; restore path is
+#                 in its own per-role scenario
+#
+# Designed to run via:
+#   make molecule-full-stack
+# or directly:
+#   cd ansible && molecule -c molecule/full-stack/molecule.yml test
+
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ../../../requirements.yml
+
+driver:
+  name: docker
+
+platforms:
+  - name: vpn-fullstack-debian13
+    image: geerlingguy/docker-debian13-ansible:latest
+    pre_build_image: true
+    privileged: true
+    command: /lib/systemd/systemd
+    capabilities:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../roles
+    VPN_SECRETS_FILE: ${MOLECULE_SCENARIO_DIRECTORY}/test-secrets.yaml
+  inventory:
+    host_vars:
+      vpn-fullstack-debian13:
+        ansible_user: root
+        allowed_ssh_cidrs: ["0.0.0.0/0"]
+        vpn:
+          enable_xray_reality: true
+          enable_nginx_xhttp: true
+          enable_naive: false
+          enable_hysteria: true
+          enable_amneziawg: false
+          enable_geodata: false
+          enable_monitoring: false
+          enable_watchdog: true
+          enable_backup: false
+          enable_subscription_host: false
+          enable_warp_outbound: false
+          enable_honeypot: true
+          enable_probe_ratelimit: true
+          xray_flow_mode: vision
+          xray_finalmask: false
+  config_options:
+    defaults:
+      callback_result_format: yaml
+
+verifier:
+  name: ansible
+
+scenario:
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy

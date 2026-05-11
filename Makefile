@@ -18,7 +18,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         audit-permissions asn-drift check-ip-reputation issue-bootstrap \
         test-tls-policing fleet-status drift-since-tag fleet-rotate \
         watch-spare promote-spare probing-summary tspu-canary \
-        emit-sbom
+        emit-sbom molecule-full-stack
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -73,6 +73,7 @@ help:
 	@echo "  probing-summary          7-day Xray/nginx/honeypot rollup as Markdown + .prom"
 	@echo "  tspu-canary              Daily TSPU rule-drift probes (run from in-cohort box)"
 	@echo "  emit-sbom                Emit CycloneDX SBOM of pinned binaries → sbom/<label>.json"
+	@echo "  molecule-full-stack      Run site.yml end-to-end inside a Docker container"
 	@echo "  verify TAG_ON_SUCCESS=1  Tag current commit as vpn-deploy-known-good-* after verify"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
@@ -177,6 +178,9 @@ install-hooks:
 molecule-test:
 	@test -n "$(ROLE)" || { echo "ROLE=<role-name> required (e.g. baseline, firewall, xray)"; exit 1; }
 	cd $(ANSIBLE_DIR)/roles/$(ROLE) && molecule test
+
+molecule-full-stack:
+	cd $(ANSIBLE_DIR) && molecule -c molecule/full-stack/molecule.yml test
 
 smoke-test:
 	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }

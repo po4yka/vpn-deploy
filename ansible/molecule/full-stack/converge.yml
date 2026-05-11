@@ -1,0 +1,3 @@
+---
+- name: Converge — full site.yml against a docker container
+  ansible.builtin.import_playbook: ../../playbooks/site.yml

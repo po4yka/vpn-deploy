@@ -1,0 +1,57 @@
+---
+- name: Verify — services + role artifacts
+  hosts: all
+  become: true
+  tasks:
+    - name: Collect service facts
+      ansible.builtin.service_facts:
+
+    - name: Required services are present
+      ansible.builtin.assert:
+        that:
+          - "'xray.service' in ansible_facts.services"
+          - "'nginx.service' in ansible_facts.services"
+          - "'hysteria-server.service' in ansible_facts.services"
+          - "'vpn-watchdog.timer' in ansible_facts.services or 'vpn-watchdog.service' in ansible_facts.services"
+          - "'honeypot.service' in ansible_facts.services"
+          - "'probe-ratelimit.service' in ansible_facts.services"
+
+    - name: xray config validates
+      ansible.builtin.command:
+        cmd: /usr/local/bin/xray run -test -config /etc/xray/config.json
+      changed_when: false
+
+    - name: nftables ruleset has the REALITY port open
+      ansible.builtin.shell:
+        cmd: "nft list ruleset inet | grep -E 'tcp dport 443' | head -1"
+      register: nft_443
+      changed_when: false
+      failed_when: nft_443.stdout == ""
+
+    - name: probe_offenders set is declared (probe-ratelimit ON)
+      ansible.builtin.shell:
+        cmd: "nft list set inet filter probe_offenders"
+      register: nft_set
+      changed_when: false
+      failed_when: nft_set.rc != 0
+
+    - name: Honeypot listener is bound
+      ansible.builtin.shell:
+        cmd: "ss -lnt | awk '{print $4}' | grep -E ':4443$'"
+      register: honey_listen
+      changed_when: false
+      failed_when: honey_listen.rc != 0
+
+    - name: REALITY listener is bound
+      ansible.builtin.shell:
+        cmd: "ss -lnt | awk '{print $4}' | grep -E ':443$'"
+      register: reality_listen
+      changed_when: false
+      failed_when: reality_listen.rc != 0
+
+    - name: Hysteria UDP listener is bound
+      ansible.builtin.shell:
+        cmd: "ss -lnu | awk '{print $4}' | grep -E ':443$'"
+      register: hys_listen
+      changed_when: false
+      failed_when: hys_listen.rc != 0
