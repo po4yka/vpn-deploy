@@ -51,6 +51,8 @@ Switch via `make PROVIDER=upcloud …`.
     (v26.2.6 → v26.5.3) with breaking-change notes for upgrades.
 12. `docs/AWG-COHORTS.md` — AmneziaWG cohort obfuscation profiles
     (RTK South, MTS/Beeline/MegaFon).
+13. `docs/MULTI-COHORT.md` — multiple VLESS+REALITY inbounds per host,
+    each with its own port/flow_mode/finalmask/clients.
 
 Operational runbooks: `docs/RUNBOOK-{rotate,rollback,incident,restore,add-fallback}.md`.
 

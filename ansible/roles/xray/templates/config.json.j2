@@ -1,3 +1,18 @@
+{%- set _client_by_name = {} %}
+{%- for _c in xray.clients %}{%- set _ = _client_by_name.update({_c.name: _c}) %}{%- endfor %}
+{%- if (xray.cohorts | default([])) | length > 0 %}
+  {%- set _cohorts = xray.cohorts %}
+  {%- set _multi = true %}
+{%- else %}
+  {%- set _cohorts = [{
+      "name": "default",
+      "port": (xray_port | default(443)),
+      "flow_mode": (vpn.xray_flow_mode | default('vision')),
+      "finalmask": (vpn.xray_finalmask | default(false)),
+      "clients": (xray.clients | map(attribute='name') | list),
+  }] %}
+  {%- set _multi = false %}
+{%- endif %}
 {
   "log": {
     "loglevel": "warning",
@@ -14,21 +29,22 @@
     "tag": "dns-inbound"
   },
   "inbounds": [
-    {%- set flow_mode = vpn.xray_flow_mode | default('vision') %}
+    {%- for _coh in _cohorts %}
+    {%- set _coh_clients = _coh.clients | map('extract', _client_by_name) | list %}
     {
-      "tag": "vless-reality",
+      "tag": "{% if _multi %}vless-reality-{{ _coh.name }}{% else %}vless-reality{% endif %}",
       "listen": "0.0.0.0",
-      "port": {{ xray_port | default(443) }},
+      "port": {{ _coh.port }},
       "protocol": "vless",
       "settings": {
         "clients": [
-          {%- for client in xray.clients %}
+          {%- for client in _coh_clients %}
           {
             "id": "{{ client.uuid }}",
-            {%- if flow_mode == 'vision' %}
+            {%- if _coh.flow_mode == 'vision' %}
             "flow": "xtls-rprx-vision",
             {%- endif %}
-            "email": "{{ client.name }}"
+            "email": "{{ client.name }}{% if _multi %}-{{ _coh.name }}{% endif %}"
           }{% if not loop.last %},{% endif %}
           {%- endfor %}
         ],
@@ -44,11 +60,11 @@
           "serverNames": {{ xray.server_names | to_json }},
           "privateKey": "{{ xray.reality_private_key }}",
           "shortIds": [
-            {%- for client in xray.clients %}
+            {%- for client in _coh_clients %}
             "{{ client.short_id }}"{% if not loop.last %},{% endif %}
             {%- endfor %}
           ]
-        }{% if vpn.xray_finalmask | default(false) %},
+        }{% if _coh.finalmask | default(false) %},
         "sockopt": {
           "finalmask": "Sudoku"
         }{% endif %}
@@ -59,7 +75,9 @@
         "metadataOnly": false,
         "routeOnly": false
       }
-    }{% if vpn.enable_nginx_xhttp | default(false) %},
+    }{% if not loop.last %},{% endif %}
+    {%- endfor %}
+    {%- if vpn.enable_nginx_xhttp | default(false) %},
     {
       "tag": "vless-xhttp-localhost",
       "listen": "127.0.0.1",
@@ -129,7 +147,12 @@
       {
         "type": "field",
         "comment": "DNS hijack — keep client DNS lookups visible to xray and resolvable",
-        "inboundTag": ["vless-reality"{% if vpn.enable_nginx_xhttp | default(false) %},"vless-xhttp-localhost"{% endif %}],
+        "inboundTag": [
+          {%- for _coh in _cohorts -%}
+          "{% if _multi %}vless-reality-{{ _coh.name }}{% else %}vless-reality{% endif %}"{% if not loop.last %},{% endif %}
+          {%- endfor -%}
+          {% if vpn.enable_nginx_xhttp | default(false) %},"vless-xhttp-localhost"{% endif %}
+        ],
         "port": "53",
         "outboundTag": "dns-out"
       },

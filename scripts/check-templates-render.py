@@ -92,6 +92,7 @@ def render_template(path: Path, vars_: dict) -> str:
     env.filters["basename"] = lambda v: os.path.basename(str(v))
     env.filters["regex_replace"] = lambda v, p, r: _re.sub(p, r, str(v))
     env.filters["regex_search"] = lambda v, p: (_re.search(p, str(v)).group(0) if _re.search(p, str(v)) else "")
+    env.filters["extract"] = lambda key, container: container[key]
     env.tests["match"] = lambda v, p: bool(_re.search(p, str(v)))
     env.tests["search"] = lambda v, p: bool(_re.search(p, str(v)))
     return env.get_template(path.name).render(**vars_)
