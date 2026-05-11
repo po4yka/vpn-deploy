@@ -14,7 +14,8 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         rollback-xray rollback-config rotate-credentials check-prereqs \
         destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
         molecule-test smoke-test validate-target scan-targets blue-green \
-        spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs
+        spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
+        audit-permissions
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -56,6 +57,7 @@ help:
 	@echo "  probe-asn HOST=…     One-shot Team Cymru ASN lookup (IP or hostname)"
 	@echo "  emit-qr CLIENT=…     PNG QR for the client (TYPE=singbox|uri, OUT=path)"
 	@echo "  check-certs          Cert hygiene: SAN, expiry, self-signed, modulus match"
+	@echo "  audit-permissions    Local FS audit: age key 0600, no stray plaintext, etc."
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
@@ -193,6 +195,9 @@ emit-qr:
 check-certs:
 	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
 	VPN_SECRETS_FILE=$(SECRETS_FILE) ./scripts/check-certs.sh
+
+audit-permissions:
+	./scripts/audit-permissions.sh
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
