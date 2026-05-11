@@ -1,0 +1,32 @@
+[Unit]
+Description=VPN active-probing rate-limiter (Xray access.log → nftables set)
+Documentation=https://github.com/po4yka/vpn-deploy/blob/main/ansible/roles/probe-ratelimit/defaults/main.yml
+After=network-online.target nftables.service xray.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# nft needs CAP_NET_ADMIN; the daemon is small and runs as root to keep
+# the seccomp surface inside @system-service.
+User=root
+Group=root
+ExecStart=/usr/local/bin/probe-ratelimit.py
+Restart=on-failure
+RestartSec=5s
+
+# Hardening — root for nft but everything else locked down.
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths={{ probe_ratelimit.textfile_dir | default('/var/lib/node_exporter/textfile') }}
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

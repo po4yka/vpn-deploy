@@ -14,6 +14,10 @@ vpn:
   enable_watchdog: true           # local probe + ntfy/Pushover alerts
   enable_backup: true
   enable_subscription_host: false # opt-in; not in v1 default deploy
+  enable_probe_ratelimit: false   # opt-in; daemon tails xray access.log,
+                                  # adds offending IPs to an nftables
+                                  # set `probe_offenders` with TTL.
+                                  # See roles/probe-ratelimit/.
   enable_honeypot: false          # opt-in; active-probing canary listener
                                   # on honeypot.port (default 4443). Logs
                                   # every TCP connect + SNI, exports
