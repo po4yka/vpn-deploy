@@ -18,9 +18,24 @@ set -euo pipefail
 
 CLIENT_NAME="${1:-}"
 if [[ -z "$CLIENT_NAME" ]]; then
-  echo "usage: $0 <client_name>" >&2
+  echo "usage: $0 <client_name> [--per-app-bypass pkg1,pkg2…] [--per-app-via-tun pkg1,pkg2…]" >&2
   exit 1
 fi
+shift
+
+# Per-app routing (Android sing-box only — the rules carry package_name).
+# bypass = those apps egress direct (no tunnel); via-tun = those apps
+# go via the selector group as usual but with an explicit rule so they
+# can't fall through to "direct" even if a later rule says otherwise.
+PER_APP_BYPASS=""
+PER_APP_VIA_TUN=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --per-app-bypass)  PER_APP_BYPASS="$2"; shift 2 ;;
+    --per-app-via-tun) PER_APP_VIA_TUN="$2"; shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 1 ;;
+  esac
+done
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -334,9 +349,31 @@ OUTBOUNDS="$(echo "$OUTBOUNDS" | jq '
     {type:"dns",    tag:"dns-out"}
   ]')"
 
+# Build per-app route rules (Android only — sing-box silently ignores
+# package_name on non-Android platforms, so the same bundle works
+# everywhere). Bypass rules come first so they short-circuit the
+# tunnel; via-tun rules are below so they override any later defaults.
+per_app_rules='[]'
+if [[ -n "$PER_APP_BYPASS" ]]; then
+  per_app_rules="$(jq -nc --arg csv "$PER_APP_BYPASS" '
+    [{
+      "package_name": ($csv | split(",") | map(select(length > 0))),
+      "outbound": "direct"
+    }]')"
+fi
+if [[ -n "$PER_APP_VIA_TUN" ]]; then
+  via_tun_rule="$(jq -nc --arg csv "$PER_APP_VIA_TUN" '
+    {
+      "package_name": ($csv | split(",") | map(select(length > 0))),
+      "outbound": "select"
+    }')"
+  per_app_rules="$(jq -nc --argjson cur "$per_app_rules" --argjson r "$via_tun_rule" '$cur + [$r]')"
+fi
+
 jq -n \
   --arg client "$CLIENT_NAME" \
   --argjson outbounds "$OUTBOUNDS" \
+  --argjson per_app "$per_app_rules" \
   '{
     "log": {"level":"warn", "timestamp":true},
     "dns": {
@@ -355,10 +392,12 @@ jq -n \
     }],
     "outbounds": $outbounds,
     "route": {
-      "rules": [
-        {"protocol":"dns", "outbound":"dns-out"},
-        {"ip_is_private":true, "outbound":"direct"}
-      ],
+      "rules":
+        $per_app +
+        [
+          {"protocol":"dns", "outbound":"dns-out"},
+          {"ip_is_private":true, "outbound":"direct"}
+        ],
       "final":"select",
       "auto_detect_interface":true
     }
