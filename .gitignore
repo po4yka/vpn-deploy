@@ -65,3 +65,6 @@ Thumbs.db
 
 # Claude Code local state
 .claude/
+
+# SBOM artifacts (reproducible from secrets schema via make emit-sbom)
+sbom/*.json

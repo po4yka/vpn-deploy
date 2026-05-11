@@ -17,7 +17,8 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
         audit-permissions asn-drift check-ip-reputation issue-bootstrap \
         test-tls-policing fleet-status drift-since-tag fleet-rotate \
-        watch-spare promote-spare probing-summary tspu-canary
+        watch-spare promote-spare probing-summary tspu-canary \
+        emit-sbom
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -71,6 +72,7 @@ help:
 	@echo "  promote-spare OTP=…      Consume the pending OTP and swing traffic to GREEN_ENV"
 	@echo "  probing-summary          7-day Xray/nginx/honeypot rollup as Markdown + .prom"
 	@echo "  tspu-canary              Daily TSPU rule-drift probes (run from in-cohort box)"
+	@echo "  emit-sbom                Emit CycloneDX SBOM of pinned binaries → sbom/<label>.json"
 	@echo "  verify TAG_ON_SUCCESS=1  Tag current commit as vpn-deploy-known-good-* after verify"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
@@ -258,6 +260,9 @@ probing-summary:
 
 tspu-canary:
 	./scripts/tspu-canary.sh
+
+emit-sbom:
+	VPN_SECRETS_FILE=$(SECRETS_FILE) python3 ./scripts/emit-sbom.py
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
