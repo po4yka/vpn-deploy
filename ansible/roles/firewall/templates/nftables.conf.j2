@@ -60,6 +60,11 @@ table inet filter {
     udp dport {{ amneziawg.listen_port | default(51820) }} accept
 {% endif %}
 
+{% if vpn.enable_honeypot | default(false) %}
+    # Active-probing canary (logs probes; no real service behind it)
+    tcp dport {{ honeypot.port | default(4443) }} accept
+{% endif %}
+
     counter drop
   }
 

@@ -14,6 +14,11 @@ vpn:
   enable_watchdog: true           # local probe + ntfy/Pushover alerts
   enable_backup: true
   enable_subscription_host: false # opt-in; not in v1 default deploy
+  enable_honeypot: false          # opt-in; active-probing canary listener
+                                  # on honeypot.port (default 4443). Logs
+                                  # every TCP connect + SNI, exports
+                                  # Prometheus textfile metrics. See
+                                  # roles/honeypot/defaults/main.yml.
   enable_warp_outbound: false     # opt-in; installs Cloudflare WARP CLI
                                   # in SOCKS5 proxy mode on 127.0.0.1.
                                   # See roles/warp-outbound for the

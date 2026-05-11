@@ -73,3 +73,7 @@
     - role: warp-outbound
       when: vpn.enable_warp_outbound | default(false)
       tags: [warp, outbound]
+
+    - role: honeypot
+      when: vpn.enable_honeypot | default(false)
+      tags: [honeypot, defensive]
