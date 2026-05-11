@@ -14,7 +14,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         rollback-xray rollback-config rotate-credentials check-prereqs \
         destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
         molecule-test smoke-test validate-target scan-targets blue-green \
-        spot-check-secrets bootstrap-secrets
+        spot-check-secrets bootstrap-secrets probe-asn
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -53,6 +53,7 @@ help:
 	@echo "  scan-targets {SEEDS=…|CIDR=…|CRAWL=…}  Discover REALITY targets via RealiTLScanner"
 	@echo "  bootstrap-secrets …  Generate full crypto + SOPS-encrypt for a fresh env"
 	@echo "  spot-check-secrets   Audit decrypted secrets for placeholders + cert health"
+	@echo "  probe-asn HOST=…     One-shot Team Cymru ASN lookup (IP or hostname)"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
@@ -176,6 +177,10 @@ bootstrap-secrets:
 spot-check-secrets:
 	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
 	VPN_SECRETS_FILE=$(SECRETS_FILE) python3 ./scripts/spot-check-secrets.py
+
+probe-asn:
+	@test -n "$(HOST)" || { echo "usage: make probe-asn HOST=mirror.example.com"; exit 1; }
+	./scripts/probe-asn.sh $(HOST)
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
