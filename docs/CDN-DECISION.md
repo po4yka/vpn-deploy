@@ -82,6 +82,16 @@ on `nginx-xhttp`.
 - The `.gitleaks.toml` has no Cloudflare-specific exemptions.
 - This document is referenced from `README.md` and `ARCHITECTURE.md` as
   the canonical answer when someone asks "why isn't CDN the default."
+- A separate `cdn-front` role exists for operators who deliberately
+  want browser-shaped XHTTP via a non-RU CDN PoP. It is off by
+  default (`vpn.enable_cdn_front: false`) and physically separate from
+  `nginx-xhttp` — turning it on does not flip a flag in the baseline
+  vhost. The role configures real-IP restoration from
+  `CF-Connecting-IP`, an `nftables` origin-firewall set populated from
+  `cloudflare.com/ips-v4` (rebuilt daily), and optional Authenticated
+  Origin Pulls. Operators reach for this role for short-term cover
+  during an IP-burn rotation or in cohorts where browser camouflage is
+  worth the policy-risk dependency.
 
 ## Revisit triggers
 

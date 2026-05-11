@@ -1,0 +1,36 @@
+---
+# Tactical Cloudflare-fronted nginx vhost. ADR docs/CDN-DECISION.md
+# is the boundary: CDN is NOT the RU baseline. This role exists for
+# operators who deliberately want browser-shaped XHTTP via a non-RU
+# CDN PoP, accepting the trade-offs that ADR documents.
+#
+# Posture:
+#   * separate nginx server block on cdn_front.port (default 8443).
+#     The plain nginx-xhttp role's vhost stays on its own port for
+#     direct connections; cdn-front is for the CDN-proxied path.
+#   * Cloudflare → cdn-front (8443) → 127.0.0.1:10085 (Xray XHTTP
+#     localhost inbound) — same upstream as nginx-xhttp, different
+#     ingress.
+#   * real-IP restoration from CF-Connecting-IP so Xray's logs +
+#     graylist see the visitor's IP, not the Cloudflare egress.
+#   * origin firewall lockdown: nftables only accepts cdn_front.port
+#     traffic from Cloudflare prefixes when origin_firewall is true.
+#   * weekly cron refreshes the CF prefix list from
+#     https://www.cloudflare.com/ips-v{4,6}.
+#
+# Off by default. Read CDN-DECISION.md before enabling.
+
+cdn_front:
+  port: 8443
+  server_name: "{{ nginx_xhttp.server_name }}"
+  upstream_addr: "127.0.0.1"
+  upstream_port: "{{ nginx_xhttp_port | default(10085) }}"
+  xhttp_path: "{{ xray.xhttp_path | default('/app-sync') }}"
+  cf_prefix_dir: /etc/cdn-front
+  cf_refresh_cron_hour: 4    # daily at 04:00 to follow CF list updates
+  origin_firewall: true
+  # Optional Cloudflare Authenticated Origin Pulls (AOP). When the
+  # PEM at this path exists, nginx requires the client to present
+  # Cloudflare's AOP cert. Distribute the cert via secrets — do not
+  # commit. Empty path → AOP disabled.
+  aop_cert_path: ""

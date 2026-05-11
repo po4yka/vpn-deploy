@@ -31,6 +31,12 @@ vpn:
                                   # adds offending IPs to an nftables
                                   # set `probe_offenders` with TTL.
                                   # See roles/probe-ratelimit/.
+  enable_cdn_front: false         # opt-in; tactical CF-fronted XHTTP
+                                  # vhost with real-IP restoration +
+                                  # optional origin-firewall lockdown.
+                                  # Read docs/CDN-DECISION.md before
+                                  # turning this on — CDN is NOT the
+                                  # RU baseline in this project.
   enable_honeypot: false          # opt-in; active-probing canary listener
                                   # on honeypot.port (default 4443). Logs
                                   # every TCP connect + SNI, exports

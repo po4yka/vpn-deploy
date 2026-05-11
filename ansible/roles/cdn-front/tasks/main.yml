@@ -1,0 +1,48 @@
+---
+- name: Ensure nginx is present
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+
+- name: Ensure prefix-list directory
+  ansible.builtin.file:
+    path: "{{ cdn_front.cf_prefix_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install refresh script
+  ansible.builtin.template:
+    src: refresh-cf-prefixes.sh.j2
+    dest: /etc/cron.daily/cdn-front-refresh-cf-prefixes
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Seed CF prefix list (first run, ignore failure)
+  ansible.builtin.command: /etc/cron.daily/cdn-front-refresh-cf-prefixes
+  changed_when: false
+  failed_when: false
+
+- name: Drop nginx CDN-front site
+  ansible.builtin.template:
+    src: cdn-front.conf.j2
+    dest: /etc/nginx/sites-available/cdn-front.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
+- name: Enable nginx CDN-front site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/cdn-front.conf
+    dest: /etc/nginx/sites-enabled/cdn-front.conf
+    state: link
+    force: true
+  notify: Reload nginx
+
+- name: Validate the full nginx config
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false

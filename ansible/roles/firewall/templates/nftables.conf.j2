@@ -24,6 +24,15 @@ table inet filter {
   }
 {% endif %}
 
+{% if (vpn.enable_cdn_front | default(false)) and (cdn_front.origin_firewall | default(true)) %}
+  # Cloudflare origin prefixes — populated by the cdn-front role's
+  # daily refresh cron from https://www.cloudflare.com/ips-v4
+  set cdn_front_origins {
+    type ipv4_addr
+    flags interval
+  }
+{% endif %}
+
   chain input {
     type filter hook input priority 0;
     policy drop;
@@ -85,6 +94,17 @@ table inet filter {
 {% if vpn.enable_honeypot | default(false) %}
     # Active-probing canary (logs probes; no real service behind it)
     tcp dport {{ honeypot.port | default(4443) }} accept
+{% endif %}
+
+{% if vpn.enable_cdn_front | default(false) %}
+    # Tactical CDN-fronted XHTTP listener — when origin_firewall is on,
+    # only Cloudflare prefixes may connect; the set is populated by
+    # /etc/cron.daily/cdn-front-refresh-cf-prefixes
+{% if cdn_front.origin_firewall | default(true) %}
+    tcp dport {{ cdn_front.port | default(8443) }} ip saddr @cdn_front_origins accept
+{% else %}
+    tcp dport {{ cdn_front.port | default(8443) }} accept
+{% endif %}
 {% endif %}
 
     counter drop

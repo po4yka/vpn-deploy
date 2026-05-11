@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Refresh Cloudflare prefix lists used by nginx (real-IP restoration)
+# and nftables (origin firewall, when enabled). Runs daily from
+# /etc/cron.daily/.
+#
+# On failure (CF endpoint unreachable, parse error, etc.) the cache
+# files stay untouched — nginx and nftables keep the previous good
+# values until the next successful refresh.
+set -euo pipefail
+
+PREFIX_DIR="{{ cdn_front.cf_prefix_dir }}"
+mkdir -p "$PREFIX_DIR"
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+curl -fsSL -o "$WORK/v4" https://www.cloudflare.com/ips-v4
+curl -fsSL -o "$WORK/v6" https://www.cloudflare.com/ips-v6
+
+# Sanity: each list must be non-empty and CIDR-shaped.
+if [[ ! -s "$WORK/v4" ]] || ! grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$' "$WORK/v4"; then
+  echo "refresh-cf-prefixes: v4 list looks malformed; keeping previous" >&2
+  exit 1
+fi
+
+# nginx real_ip_header form:
+#   set_real_ip_from <CIDR>;
+#   real_ip_header CF-Connecting-IP;
+{
+  awk '{print "set_real_ip_from " $0 ";"}' "$WORK/v4"
+  awk '{print "set_real_ip_from " $0 ";"}' "$WORK/v6"
+  echo 'real_ip_header CF-Connecting-IP;'
+  echo 'real_ip_recursive on;'
+} > "$WORK/cloudflare.real_ip.new"
+
+install -m 0644 "$WORK/cloudflare.real_ip.new" "$PREFIX_DIR/cloudflare.real_ip"
+
+# nftables set form: one line per CIDR, no commas.
+install -m 0644 "$WORK/v4" "$PREFIX_DIR/cloudflare.v4"
+install -m 0644 "$WORK/v6" "$PREFIX_DIR/cloudflare.v6"
+
+# Reload nginx if the file changed (best-effort).
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl reload nginx 2>/dev/null || true
+fi
+
+# Origin firewall: rebuild the nftables set from cloudflare.v4.
+if [[ "{{ cdn_front.origin_firewall | string | lower }}" == "true" ]]; then
+  nft flush set inet filter cdn_front_origins 2>/dev/null || true
+  while IFS= read -r cidr; do
+    [[ -n "$cidr" ]] || continue
+    nft add element inet filter cdn_front_origins { "$cidr" } 2>/dev/null || true
+  done < "$PREFIX_DIR/cloudflare.v4"
+fi
