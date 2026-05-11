@@ -71,6 +71,39 @@ fi
 probe "disk root <90%" \
   bash -c '[[ $(df --output=pcent / | tail -1 | tr -d " %") -lt 90 ]]'
 
+# ---------------------------------------------------------------------------
+# Failure-class detectors. Each detector that fires adds a tag to the
+# alert. Operators index runbooks off the tag instead of triaging a
+# generic up/down failure. See docs/RUNBOOK-incident.md for the mapping
+# (active_probing → "graylist spikes"; tcp_listen_wedge → "wedged
+# listener"; nginx_403_spike → "probe/scrape wave").
+# ---------------------------------------------------------------------------
+declare -A classes=()
+
+xray_access="/var/log/xray/access.log"
+if [[ "${ENABLE_XRAY:-true}" == "true" && -r "$xray_access" ]]; then
+  recent_reject="$(tail -n 2000 "$xray_access" 2>/dev/null \
+    | grep -c -E 'REJECT|graylist' || true)"
+  if [[ "${recent_reject:-0}" -gt 20 ]]; then
+    classes[active_probing]="${recent_reject} REJECT/graylist events in tail"
+  fi
+fi
+
+nginx_access="/var/log/nginx/access.log"
+if [[ "${ENABLE_NGINX_XHTTP:-true}" == "true" && -r "$nginx_access" ]]; then
+  recent_403="$(tail -n 2000 "$nginx_access" 2>/dev/null \
+    | awk '$9==403{n++} END{print n+0}')"
+  if [[ "${recent_403:-0}" -gt 50 ]]; then
+    classes[nginx_403_spike]="${recent_403} 403 responses in tail"
+  fi
+fi
+
+if [[ "${ENABLE_XRAY:-true}" == "true" ]]; then
+  if ! timeout 2 bash -c "</dev/tcp/127.0.0.1/${XRAY_PORT:-443}" 2>/dev/null; then
+    classes[tcp_listen_wedge]="cannot open loopback TCP to xray :${XRAY_PORT:-443}"
+  fi
+fi
+
 now=$(date +%s)
 
 if (( probe_failure_count > 0 )); then
@@ -90,14 +123,36 @@ if (( STATE[consecutive_fails] >= FAIL_THRESHOLD )) \
    && (( STATE[alerts_this_hour] < ALERTS_PER_HOUR_MAX )); then
   should_alert=1
 fi
+# An active failure-class event is always alert-worthy even without N
+# consecutive probe failures (a graylist spike can be live without
+# breaking the listener). The non-emptiness check uses ${!classes[*]}
+# (returns the keys) rather than the array-length form, because the
+# array-length form embeds a Jinja2 comment delimiter inside this
+# bash-via-Jinja2 template.
+if [[ -n "${!classes[*]}" ]] \
+   && (( STATE[alerts_this_hour] < ALERTS_PER_HOUR_MAX )); then
+  should_alert=1
+fi
 
 result_text="$(printf '%s\n' "${probe_results[@]}")"
 
+# Build class block for the alert body + ntfy tag list.
+class_lines=""
+class_tags=""
+for cls in "${!classes[@]}"; do
+  class_lines+="class=${cls}: ${classes[$cls]}"$'\n'
+  class_tags+=",class:${cls}"
+done
+
 if (( should_alert )); then
   fail_list="$(printf '%s, ' "${probe_failures[@]}" | sed 's/, $//')"
-  title="VPN[$HOSTNAME] failing: ${fail_list}"
+  if [[ -n "$fail_list" ]]; then
+    title="VPN[$HOSTNAME] failing: ${fail_list}"
+  else
+    title="VPN[$HOSTNAME] class signal: ${!classes[*]}"
+  fi
   body="consecutive_fails=${STATE[consecutive_fails]}
-${result_text}"
+${class_lines}${result_text}"
 
   case "${WATCHDOG_PROVIDER:-ntfy}" in
     ntfy)
@@ -108,7 +163,7 @@ ${result_text}"
       curl -fsS -X POST \
         -H "Title: ${title}" \
         -H "Priority: high" \
-        -H "Tags: warning,vpn,${HOSTNAME}" \
+        -H "Tags: warning,vpn,${HOSTNAME}${class_tags}" \
         "${auth_args[@]}" \
         --data "${body}" \
         "${NTFY_URL%/}/${NTFY_TOPIC}" >/dev/null || true
@@ -136,8 +191,11 @@ fi
 chmod 0640 "$STATE_FILE"
 
 # Always log to journal so `journalctl -u vpn-watchdog.service` shows status
-echo "watchdog: consecutive_fails=${STATE[consecutive_fails]} alerts_this_hour=${STATE[alerts_this_hour]}"
+echo "watchdog: consecutive_fails=${STATE[consecutive_fails]} alerts_this_hour=${STATE[alerts_this_hour]} classes=${!classes[*]:-none}"
 printf '%s\n' "${probe_results[@]}"
+if [[ -n "${!classes[*]}" ]]; then
+  printf '%s' "$class_lines"
+fi
 
 # Exit 0 even on probe failures — the systemd timer runs us regardless and we
 # don't want failed status to mask the alert flow.
