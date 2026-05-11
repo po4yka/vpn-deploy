@@ -29,25 +29,39 @@ against the UpCloud account.
 |---|---|
 | `UPCLOUD_USERNAME` | UpCloud sub-account with VPS create + destroy |
 | `UPCLOUD_PASSWORD` | sub-account password — use a tightly scoped sub-account, NOT the master account |
-| `CI_SOPS_AGE_KEY` | age private key for `secrets/ci.secrets.sops.yaml` (separate from any operator key) |
+| `CI_SOPS_AGE_KEY` | age private key staged onto the runner so any later step needing SOPS works; CI does not commit an encrypted blob |
 | `CI_SSH_PRIVATE_KEY` | SSH key the ephemeral VPS authorises; not reused outside CI |
+| `CI_UPCLOUD_TEMPLATE_UUID` | Debian-13 / Ubuntu-24.04 minimal cloud-image template UUID. List candidates via `upctl storage list --public --template`. |
 
-Plus an inline-templated UpCloud storage template UUID. The
-workflow refuses to run while the tfvars carries
-`REPLACE_WITH_CI_TEMPLATE_UUID` — set this to a Debian-13 / Ubuntu-
-24.04 minimal template UUID via repo settings or workflow env.
+## CI secrets generated at runtime
 
-## CI-only secrets blob
+The workflow does **not** carry a `secrets/ci.secrets.sops.yaml` blob.
+`scripts/ci-bootstrap-secrets.sh` runs in the workflow and writes a
+complete synthetic secrets YAML to
+`/tmp/vpn-${CI_ENV}.secrets.yaml`:
 
-A long-form follow-up: commit `secrets/ci.secrets.sops.yaml`
-encrypted to `CI_SOPS_AGE_KEY` only. The blob contains synthetic
-xray / hysteria / amneziawg values for a one-shot deploy. Until that
-file exists, the workflow emits a warning and skips the deploy
-phase (it still tests the provisioning + teardown wiring).
+  * fresh REALITY keypair (from `ghcr.io/xtls/xray-core:<version>`
+    `x25519`)
+  * fresh client UUID + shortId, fresh Hysteria password, fresh
+    AmneziaWG keypair + random H1..H4
+  * self-signed certificate covering the CI server hostname
+  * Xray + Hysteria release-asset sha256 computed live by curl +
+    sha256sum from the upstream URLs
 
-The CI age key MUST NOT be the operator age key. Treat the CI blob
-as one-shot test data; rotate the CI age key whenever it leaves the
-GitHub Actions secret store.
+The certificate is self-signed and the geodata URLs are placeholders,
+so the `pre-deploy-check` chain would reject the secrets. CI runs
+with `SKIP_PRECHECK=1`; ansible's per-role validate-before-restart
+still gates a broken render.
+
+Disabled roles in CI (via `ANSIBLE_EXTRA_VARS`):
+
+  * `enable_amneziawg=false` — kernel module + NAT not portable
+  * `enable_geodata=false`   — placeholder URLs would 404
+  * `enable_backup=false`    — restic-against-localhost adds noise
+  * `enable_monitoring=false` — node_exporter not interesting here
+  * `enable_warp_outbound=false` / `enable_honeypot=false` /
+    `enable_probe_ratelimit=false` — defensive roles tested in
+    their own molecule scenarios
 
 ## Cleanup invariants
 

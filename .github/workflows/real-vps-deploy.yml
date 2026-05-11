@@ -67,7 +67,7 @@ jobs:
 
       - name: Verify required secrets are present
         run: |
-          for v in UPCLOUD_USERNAME UPCLOUD_PASSWORD CI_SOPS_AGE_KEY CI_SSH_PRIVATE_KEY; do
+          for v in UPCLOUD_USERNAME UPCLOUD_PASSWORD CI_SOPS_AGE_KEY CI_SSH_PRIVATE_KEY CI_UPCLOUD_TEMPLATE_UUID; do
             if [ -z "${!v:-}" ] && [ -z "$(printenv "$v" || true)" ]; then
               echo "::error::Secret $v is unset — configure it in repo settings."
               exit 1
@@ -76,6 +76,7 @@ jobs:
         env:
           CI_SOPS_AGE_KEY: ${{ secrets.CI_SOPS_AGE_KEY }}
           CI_SSH_PRIVATE_KEY: ${{ secrets.CI_SSH_PRIVATE_KEY }}
+          CI_UPCLOUD_TEMPLATE_UUID: ${{ secrets.CI_UPCLOUD_TEMPLATE_UUID }}
 
       - name: Set up tooling
         run: |
@@ -102,23 +103,31 @@ jobs:
           # collide with a real prod state file.
           ts="$(date -u +%Y%m%d-%H%M%S)"
           ci_env="ci-${{ github.run_id }}-${ts}"
+          server_name="vpn-${ci_env}.ci.test"
           echo "CI_ENV=${ci_env}" >> "$GITHUB_ENV"
+          echo "CI_SERVER_NAME=${server_name}" >> "$GITHUB_ENV"
+          template_uuid="${{ secrets.CI_UPCLOUD_TEMPLATE_UUID }}"
+          if [ -z "$template_uuid" ]; then
+            echo "::error::CI_UPCLOUD_TEMPLATE_UUID secret is unset — set it to a Debian-13 / Ubuntu-24.04 minimal template UUID in repo settings."
+            exit 1
+          fi
           cat > "terraform/providers/upcloud/environments/${ci_env}.tfvars" <<TFVARS
-          server_name          = "vpn-${ci_env}"
+          server_name          = "${server_name}"
           zone                 = "${{ github.event.inputs.zone || 'fi-hel1' }}"
           plan                 = "1xCPU-2GB"
-          storage_template     = "REPLACE_WITH_CI_TEMPLATE_UUID"
+          storage_template     = "${template_uuid}"
           admin_ssh_public_key = file("~/.ssh/vpn_deploy.pub")
           allowed_ssh_cidrs    = ["0.0.0.0/0"]
           build_env            = "${ci_env}"
           TFVARS
 
-      - name: Sanity — refuse to run without a CI template UUID
+      - name: Generate synthetic CI secrets
         run: |
-          if grep -q REPLACE_WITH_CI_TEMPLATE_UUID "terraform/providers/upcloud/environments/${CI_ENV}.tfvars"; then
-            echo "::error::CI tfvars carries REPLACE_WITH_CI_TEMPLATE_UUID — set CI_UPCLOUD_TEMPLATE_UUID in repo secrets and inline-template it here."
-            exit 1
-          fi
+          set -euo pipefail
+          export SECRETS_FILE="/tmp/vpn-${CI_ENV}.secrets.yaml"
+          OUT="$SECRETS_FILE" SERVER_NAME="$CI_SERVER_NAME" CLIENT_NAME="ci-test" \
+            ./scripts/ci-bootstrap-secrets.sh
+          echo "SECRETS_FILE=$SECRETS_FILE" >> "$GITHUB_ENV"
 
       - name: Deploy
         run: |
@@ -126,22 +135,23 @@ jobs:
           export ENV="$CI_ENV"
           export PROVIDER=upcloud
           export ANSIBLE_SSH_PRIVATE_KEY_FILE="$HOME/.ssh/vpn_deploy"
-          # CI secrets blob is committed encrypted at
-          # secrets/ci.secrets.sops.yaml (a follow-up commit will add
-          # it). For now: synthesize a minimal placeholder if the
-          # file isn't present so the job's structure runs end-to-end.
-          if [ ! -f secrets/ci.secrets.sops.yaml ]; then
-            echo "::warning::secrets/ci.secrets.sops.yaml not committed yet — skipping deploy phase."
-            echo "DEPLOY_SKIPPED=1" >> "$GITHUB_ENV"
-            exit 0
-          fi
-          export SECRETS_FILE="/tmp/vpn-${CI_ENV}.secrets.yaml"
-          sops --decrypt secrets/ci.secrets.sops.yaml > "$SECRETS_FILE"
-          chmod 0600 "$SECRETS_FILE"
-          make init plan apply inventory wait dry-run deploy verify smoke-test
+          # Self-signed cert + placeholder geodata URLs trip
+          # spot-check-secrets and check-certs; CI deploys with the
+          # pre-deploy-check chain skipped. The deploy still runs
+          # ansible's per-role validate-before-restart, so a broken
+          # render still fails the job.
+          export SKIP_PRECHECK=1
+          # Disable roles whose runtime needs a real upstream or
+          # platform feature CI can't reproduce.
+          export ANSIBLE_EXTRA_VARS="vpn.enable_amneziawg=false vpn.enable_geodata=false vpn.enable_backup=false vpn.enable_monitoring=false vpn.enable_warp_outbound=false vpn.enable_honeypot=false vpn.enable_probe_ratelimit=false"
+          make init plan apply inventory wait
+          VPN_SECRETS_FILE=$SECRETS_FILE \
+            ansible-playbook ansible/playbooks/site.yml --extra-vars "$ANSIBLE_EXTRA_VARS"
+          VPN_SECRETS_FILE=$SECRETS_FILE \
+            ansible-playbook ansible/playbooks/verify.yml --extra-vars "$ANSIBLE_EXTRA_VARS"
 
       - name: Always destroy the ephemeral VPS
-        if: always() && env.DEPLOY_SKIPPED != '1'
+        if: always()
         run: |
           set -euo pipefail
           export ENV="$CI_ENV"
