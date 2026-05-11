@@ -48,7 +48,10 @@
             "{{ client.short_id }}"{% if not loop.last %},{% endif %}
             {%- endfor %}
           ]
-        }
+        }{% if vpn.xray_finalmask | default(false) %},
+        "sockopt": {
+          "finalmask": "Sudoku"
+        }{% endif %}
       },
       "sniffing": {
         "enabled": true,
