@@ -190,7 +190,9 @@ for i in "${!host_pairs[@]}"; do
     short_id="$(echo "$client_json" | jq -r .short_id)"
   fi
 
-  # P0 REALITY
+  # P0 REALITY — multi-cohort aware. When xray.cohorts is non-empty, emit one
+  # outbound per cohort the client is in, each on its own port + flow_mode.
+  # Empty cohorts → single outbound on xray_port with vpn.xray_flow_mode.
   if [[ "$enable_reality" == "true" ]]; then
     reality_pubkey="$(jq -r '.xray.reality_public_key // empty' "$secrets_tmp")"
     sni="$(jq -r '.xray.server_names[0] // empty' "$secrets_tmp")"
@@ -198,28 +200,55 @@ for i in "${!host_pairs[@]}"; do
       echo "enabled REALITY profile is missing xray.reality_public_key or xray.server_names in ${sops_file}" >&2
       exit 1
     fi
-    if [[ "$flow_mode" == "mux" ]]; then
-      OUTBOUNDS="$(echo "$OUTBOUNDS" | jq \
-        --arg tag "p0-reality-${tag_prefix}" \
-        --arg ip "$server_ip" --arg uuid "$uuid" \
-        --arg sni "$sni" --arg pk "$reality_pubkey" --arg sid "$short_id" \
-        --argjson port "$xray_server_port" \
-        '. += [{type:"vless", tag:$tag, server:$ip, server_port:$port, uuid:$uuid,
-                multiplex:{enabled:true, protocol:"smux", max_streams:8},
-                tls:{enabled:true, server_name:$sni,
-                     utls:{enabled:true, fingerprint:"chrome"},
-                     reality:{enabled:true, public_key:$pk, short_id:$sid}}}]')"
+
+    cohorts_json="$(jq -c '.xray.cohorts // []' "$secrets_tmp")"
+    n_cohorts="$(jq 'length' <<< "$cohorts_json")"
+
+    emit_reality_outbound() {
+      # args: tag_suffix port flow
+      local suffix="$1" port="$2" flow="$3"
+      local outb_args=(
+        --arg tag "p0-reality-${tag_prefix}${suffix}"
+        --arg ip "$server_ip" --arg uuid "$uuid"
+        --arg sni "$sni" --arg pk "$reality_pubkey" --arg sid "$short_id"
+        --argjson port "$port"
+      )
+      if [[ "$flow" == "mux" ]]; then
+        OUTBOUNDS="$(echo "$OUTBOUNDS" | jq "${outb_args[@]}" \
+          '. += [{type:"vless", tag:$tag, server:$ip, server_port:$port, uuid:$uuid,
+                  multiplex:{enabled:true, protocol:"smux", max_streams:8},
+                  tls:{enabled:true, server_name:$sni,
+                       utls:{enabled:true, fingerprint:"chrome"},
+                       reality:{enabled:true, public_key:$pk, short_id:$sid}}}]')"
+      else
+        OUTBOUNDS="$(echo "$OUTBOUNDS" | jq "${outb_args[@]}" \
+          '. += [{type:"vless", tag:$tag, server:$ip, server_port:$port, uuid:$uuid,
+                  flow:"xtls-rprx-vision",
+                  tls:{enabled:true, server_name:$sni,
+                       utls:{enabled:true, fingerprint:"chrome"},
+                       reality:{enabled:true, public_key:$pk, short_id:$sid}}}]')"
+      fi
+    }
+
+    if (( n_cohorts == 0 )); then
+      # Legacy single-cohort: one outbound on xray_port with global flow_mode.
+      emit_reality_outbound "" "$xray_server_port" "$flow_mode"
     else
-      OUTBOUNDS="$(echo "$OUTBOUNDS" | jq \
-        --arg tag "p0-reality-${tag_prefix}" \
-        --arg ip "$server_ip" --arg uuid "$uuid" \
-        --arg sni "$sni" --arg pk "$reality_pubkey" --arg sid "$short_id" \
-        --argjson port "$xray_server_port" \
-        '. += [{type:"vless", tag:$tag, server:$ip, server_port:$port, uuid:$uuid,
-                flow:"xtls-rprx-vision",
-                tls:{enabled:true, server_name:$sni,
-                     utls:{enabled:true, fingerprint:"chrome"},
-                     reality:{enabled:true, public_key:$pk, short_id:$sid}}}]')"
+      # Multi-cohort: emit one outbound per cohort that lists this client.
+      client_cohorts="$(jq -c --arg name "$CLIENT_NAME" \
+        '.xray.cohorts | map(select(.clients | index($name)))' "$secrets_tmp")"
+      n_match="$(jq 'length' <<< "$client_cohorts")"
+      if (( n_match == 0 )); then
+        echo "client '$CLIENT_NAME' is not listed in any xray.cohorts[].clients in ${sops_file}" >&2
+        exit 1
+      fi
+      for i in $(seq 0 $((n_match - 1))); do
+        c="$(jq -c ".[$i]" <<< "$client_cohorts")"
+        c_name="$(jq -r '.name' <<< "$c")"
+        c_port="$(jq -r '.port'  <<< "$c")"
+        c_flow="$(jq -r '.flow_mode // "vision"' <<< "$c")"
+        emit_reality_outbound "-${c_name}" "$c_port" "$c_flow"
+      done
     fi
   fi
 
