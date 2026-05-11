@@ -42,8 +42,32 @@ UpCloud is the primary provider in v1. Resource shape:
 - `nl-ams1` — Amsterdam
 - `pl-waw1` — Warsaw
 
-Picking a zone is a routing-quality decision, not a censorship-evasion
-one. Pick the zone closest to your client cohort's egress.
+#### Zone selection by client cohort
+
+Zone choice is primarily a routing-quality decision, with a secondary
+attribution-risk axis. The combination of the IP's prefix-history
+weight and the geographic distance to the cohort matters more than the
+nominal latency number.
+
+| Cohort | Recommended | Avoid | Why |
+|---|---|---|---|
+| RU mobile (MTS / MegaFon / Beeline) | `fi-hel1`, `de-fra1` | `nl-ams1`, `pl-waw1` | NL/PL ranges historically take more probing waves; FI/DE peering through KSC/Stockholm carries fewer flagged prefixes |
+| RU home ISP (Rostelecom / MTS-broadband) | `de-fra1`, `fi-hel1` | `nl-ams1` | DE-Internet-Exchange peers directly with RU upstreams; lower-jitter for XHTTP/Hysteria |
+| RU mobile under TLS-policing rule (~12-conn home-ISP block) | `de-fra1` + `xray_flow_mode: mux` | any single-zone deploy | The policing rule is independent of zone; mitigation is the cohort-level mux flag (see `docs/MULTI-COHORT.md`), not the zone |
+| EU-resident operator testing | `nl-ams1`, `pl-waw1` | n/a | Closer for development; not the same threat surface as production cohorts |
+| Mixed-cohort fleet | two zones in different countries | one zone | Splitting across `fi-hel1` + `de-fra1` (or +`nl-ams1`) gives the warm-spare (`docs/`-flow `make watch-spare` / `make promote-spare`) something to promote to without sharing a peering point |
+
+After the zone is picked, validate the actual ASN that UpCloud assigns
+your VPS prefix:
+
+```bash
+make probe-asn HOST=$(terraform -chdir=terraform/providers/upcloud output -raw server_ipv4)
+```
+
+If the returned ASN is in the "Avoid" tier from the table at the top of
+this document, blue-green immediately to a new IP in the same zone or
+move to a different zone. Don't deploy clients against an IP whose ASN
+shows up on the TCP-freeze list.
 
 ### Storage template UUIDs
 
