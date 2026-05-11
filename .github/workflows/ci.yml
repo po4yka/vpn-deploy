@@ -99,7 +99,7 @@ jobs:
 
       - name: Install pinned tooling
         run: |
-          pip install -r requirements.txt
+          pip install --require-hashes --no-deps -r requirements.txt
           ansible-galaxy collection install -r requirements.yml
 
       - name: ansible-lint
@@ -141,7 +141,7 @@ jobs:
 
       - name: Install pinned tooling
         run: |
-          pip install -r requirements.txt
+          pip install --require-hashes --no-deps -r requirements.txt
           ansible-galaxy collection install -r requirements.yml
 
       - name: molecule test
@@ -171,7 +171,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install deps
-        run: pip install -r requirements.txt
+        run: pip install --require-hashes --no-deps -r requirements.txt
       - name: check-secrets-coverage
         run: python3 scripts/check-secrets-coverage.py
 
@@ -185,7 +185,7 @@ jobs:
           python-version: "3.12"
       - name: Install deps
         run: |
-          pip install -r requirements.txt
+          pip install --require-hashes --no-deps -r requirements.txt
           sudo apt-get update
           sudo apt-get install -y nginx-light
       - name: check-templates-render
@@ -200,6 +200,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install yamllint
-        run: pip install -r requirements.txt
+        run: pip install --require-hashes --no-deps -r requirements.txt
       - name: yamllint
         run: yamllint -c .yamllint.yml .
