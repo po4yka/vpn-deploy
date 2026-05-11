@@ -36,20 +36,29 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 | **Cohort group_vars** | render check (group_vars/all.yml + cohort file are merged into render env) | n/a | n/a | If a cohort file references a flag the role doesn't accept, render fails. |
 | **YAML formatting** | **yamllint** (CI) | n/a | n/a | uses `.yamllint.yml` profile. |
 | **Secret leak detection** | **gitleaks** with custom rules (CI + pre-commit) | n/a | n/a | Custom rules: VLESS/Trojan/Hysteria URIs, REALITY priv keys, WG priv keys, age-secret-key, subscription tokens. |
+| **Placeholder leak** | **`scripts/pre-commit-placeholder-scan.py`** (pre-commit) | n/a | n/a | Rejects any staged file (outside the schema example + generator scripts) that carries a `REPLACE_WITH_*` token. |
+| **Decrypted-secrets audit** | **`scripts/spot-check-secrets.py`** (gating `make deploy`/`verify`) | walks the decrypted YAML | n/a | Placeholder check, cert expiry, RSA modulus match, H1..H4 type, password length. Bypass with `SKIP_PRECHECK=1`. |
+| **Cert hygiene** | **`scripts/check-certs.sh`** (gating `make deploy`/`verify`) | openssl-driven | n/a | SAN coverage, expiry < 14 days, self-signed detection, modulus match across nginx_xhttp / hysteria / naive. |
+| **Pinned-binary reproducibility** | **`.github/workflows/reproducible-build.yml`** (CI) | go build + sha256 compare | n/a | Three jobs: xray (from-source rebuild → soft-warn on bytewise drift), hysteria (hard-fail on release-asset sha256 mismatch), RealiTLScanner (same). |
+| **Real-VPS end-to-end** | **`.github/workflows/real-vps-deploy.yml`** (workflow_dispatch / `ci-real-deploy` label) | provision → site.yml → verify → smoke-test → destroy | n/a | Approximates production deploy as closely as Actions allows. Ephemeral UpCloud VPS per run. See `docs/CI-REAL-DEPLOY.md`. |
+| **Kill-switch validation** | **`scripts/check-singbox-killswitch.py`** (operator-driven) | static JSON analysis | n/a | Verifies auto_route + strict_route, route.final ≠ direct, DNS detour ≠ direct, no IPv6-only outbounds. |
 
 ## Test phases mapped to operator workflow
 
 | Operator step | Tests that protect it |
 |---|---|
-| `git commit` (local) | pre-commit hooks: gitleaks, terraform fmt, ansible-lint, yamllint, **shellcheck**, **secrets-coverage**, **templates-render** |
-| `git push` (PR) | CI matrix: terraform fmt+validate (3 providers), cloud-init schema, ansible-lint + syntax, **all 15 role + 1 full-stack molecule scenarios**, shellcheck, secrets-coverage, templates-render, yamllint, gitleaks |
+| `git commit` (local) | pre-commit hooks: gitleaks, terraform fmt, ansible-lint, yamllint, **shellcheck**, **secrets-coverage**, **templates-render**, **placeholder-scan** |
+| `git push` (PR) | CI matrix: terraform fmt+validate (3 providers), cloud-init schema, ansible-lint + syntax, **all 15 role + 1 full-stack molecule scenarios**, **reproducible-build** (xray + hysteria + RealiTLScanner sha256), shellcheck, secrets-coverage, templates-render, yamllint, gitleaks |
+| PR labeled `ci-real-deploy` | **real-vps-deploy** workflow: provisions an ephemeral UpCloud VPS, runs site.yml + verify + smoke-test, destroys — closest approximation to production in CI. See `docs/CI-REAL-DEPLOY.md`. |
 | `make validate` (operator) | terraform fmt + validate + gitleaks + ansible-lint + ansible syntax-check |
-| `make validate-target` | live probe of REALITY target (TLS / H2 / SAN / uTLS / template OPSEC) |
+| `make validate-target` | live probe of REALITY target (TLS / H2 / SAN / uTLS / ASN / template OPSEC) |
 | `make plan` | terraform plan (catches infrastructure drift) |
-| `make dry-run` | ansible --check --diff (operator reviews every change) |
+| `make dry-run` / `make deploy` / `make verify` | **pre-deploy-check** runs first: spot-check-secrets + check-certs; bypass with `SKIP_PRECHECK=1` |
 | `make deploy` | role handlers run validate-before-restart (Xray, nftables, nginx) |
-| `make verify` | post-deploy gates assert services up, listeners present |
+| `make verify [TAG_ON_SUCCESS=1]` | post-deploy gates assert services up, listeners present; optionally git-tag the commit as `vpn-deploy-known-good-*` |
+| `make drift-since-tag` | weekly: diff fleet against the last known-good tag (terraform plan + ansible --check) |
 | `make smoke-test` | end-to-end real-traffic dial through every enabled profile |
+| `make check-killswitch BUNDLE=…` | per-client validation of emitted sing-box bundle (5 rules: auto_route, strict_route, sniff, final ≠ direct, DNS detour ≠ direct, no IPv6-only outbound) |
 
 ## Dependency updates
 
