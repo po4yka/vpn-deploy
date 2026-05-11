@@ -1,0 +1,17 @@
+---
+- name: Converge probe-ratelimit role
+  hosts: all
+  become: true
+  pre_tasks:
+    # The role expects /var/log/xray/access.log; the daemon waits for the
+    # file rather than failing, so we just need to ensure the directory
+    # exists for service start.
+    - name: Ensure /var/log/xray exists
+      ansible.builtin.file:
+        path: /var/log/xray
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+  roles:
+    - role: probe-ratelimit

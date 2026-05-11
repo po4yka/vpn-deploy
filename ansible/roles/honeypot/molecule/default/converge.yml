@@ -1,0 +1,6 @@
+---
+- name: Converge honeypot role
+  hosts: all
+  become: true
+  roles:
+    - role: honeypot

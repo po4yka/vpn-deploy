@@ -1,0 +1,43 @@
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ../../../../requirements.yml
+
+driver:
+  name: docker
+
+platforms:
+  - name: vpn-warp-debian13
+    image: geerlingguy/docker-debian13-ansible:latest
+    pre_build_image: true
+    privileged: true
+    command: /lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../..
+  inventory:
+    host_vars:
+      vpn-warp-debian13:
+        ansible_user: root
+  config_options:
+    defaults:
+      callback_result_format: yaml
+
+verifier:
+  name: ansible
+
+# Cloudflare WARP installer assumes systemd-networkd + real DNS + an
+# accessible Cloudflare endpoint to register. None of that is reliable
+# from a CI container, so the scenario validates structure only.
+scenario:
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - destroy

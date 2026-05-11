@@ -1,0 +1,16 @@
+---
+# Available for ad-hoc `molecule converge`; not part of the default
+# CI test_sequence (the role builds Caddy via xcaddy from source).
+- name: Converge naive role (debug only)
+  hosts: all
+  become: true
+  vars:
+    naive_secrets:
+      server_name: "vpn.example.com"
+      username: "u-test"
+      password: "p-test-not-secret"
+      probe_resistance_secret: "long-random-string-for-test-only"
+      cert_pem: ""
+      key_pem: ""
+  roles:
+    - role: naive

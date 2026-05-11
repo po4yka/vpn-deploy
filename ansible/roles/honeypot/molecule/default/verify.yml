@@ -1,0 +1,24 @@
+---
+- name: Verify honeypot role
+  hosts: all
+  become: true
+  tasks:
+    - name: Service is active
+      ansible.builtin.command:
+        cmd: systemctl is-active honeypot.service
+      register: svc
+      changed_when: false
+      failed_when: svc.stdout != "active"
+
+    - name: Listener bound on configured port
+      ansible.builtin.shell:
+        cmd: "ss -lnt | awk '{print $4}' | grep -E ':4443$'"
+      register: bound
+      changed_when: false
+      failed_when: bound.rc != 0
+
+    - name: Listener script present
+      ansible.builtin.stat:
+        path: /usr/local/bin/honeypot.py
+      register: script
+      failed_when: not script.stat.exists or not script.stat.executable

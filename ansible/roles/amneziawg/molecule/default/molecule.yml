@@ -1,0 +1,45 @@
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ../../../../requirements.yml
+
+driver:
+  name: docker
+
+platforms:
+  - name: vpn-awg-debian13
+    image: geerlingguy/docker-debian13-ansible:latest
+    pre_build_image: true
+    privileged: true
+    command: /lib/systemd/systemd
+    capabilities: [NET_ADMIN]
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../..
+  inventory:
+    host_vars:
+      vpn-awg-debian13:
+        ansible_user: root
+  config_options:
+    defaults:
+      callback_result_format: yaml
+
+verifier:
+  name: ansible
+
+# AmneziaWG userspace requires kernel features that aren't reliably
+# available in a Docker container. Standard sequence is reduced to
+# syntax-only to catch task-file regressions without trying to bring
+# up an awg interface.
+scenario:
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - destroy

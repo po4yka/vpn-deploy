@@ -18,13 +18,17 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 | **Ansible role: xray** | ansible-lint | render check (JSON validity) | **molecule** (template-only, stub binary) | tests config.json shape, systemd unit, symlink rollback. |
 | **Ansible role: nginx-xhttp** | ansible-lint | render check (`nginx -t`) | **molecule** (idempotence + verify) | self-signed cert generated in pre_tasks; verifies no Cloudflare-specific directives leaked into RU baseline. |
 | **Ansible role: hysteria** | ansible-lint | render check | **molecule** (template-only, stub binary) | verifies clients render + Salamander disabled by default. |
-| **Ansible role: amneziawg** | ansible-lint | render check | **skipped (justified)** | requires kernel TUN device + golang build of amneziawg-go inside Docker — not tractable in privilege-restricted CI. Covered by render check + `ansible-lint`. |
+| **Ansible role: amneziawg** | ansible-lint | render check | **molecule (syntax+create only)** | full converge needs a kernel TUN device + golang build of amneziawg-go that Docker can't reliably provide; scenario exercises task-file structure so regressions are caught early, deeper testing happens against a real VPS. |
 | **Ansible role: monitoring** | ansible-lint | render check | **molecule** | verifies node_exporter + journald + logrotate. |
 | **Ansible role: watchdog** | ansible-lint + `bash -n` (verify play) | render check | **molecule** + idempotence | verifies probe script syntax + env file perms + topic rendering. |
 | **Ansible role: backup** | ansible-lint | render check | **molecule** | verifies restic init + remote-sync block correctly *omitted* when disabled. |
 | **Ansible role: subscription-host** | ansible-lint | render check (`nginx -t`) | **molecule** + idempotence | verifies revoked-tokens map + rate-limit zone + payload dir perms. |
-| **Ansible role: geodata** | ansible-lint | render check | **skipped (justified)** | role's only side effect is downloading from upstream URLs; testing it inside CI couples to upstream availability and rate limits. Covered by render check + bash-syntax. |
-| **Ansible role: naive** | ansible-lint | render check (Caddyfile syntax NOT validated — Caddy not in CI matrix) | **skipped (justified)** | xcaddy build pulls Go modules over the network; build time + flakiness ratio not worth it for a v1 alternative role. Covered by render check + `bash -n` on systemd unit. |
+| **Ansible role: geodata** | ansible-lint | render check | **molecule (syntax-only sequence)** | converge would couple to upstream URL availability + rate limits; scenario still exercises task-file structure. Use `molecule converge` manually for ad-hoc full-path testing. |
+| **Ansible role: naive** | ansible-lint | render check (Caddyfile syntax NOT validated — Caddy not in CI matrix) | **molecule (syntax-only sequence)** | xcaddy from-source build skipped in CI to avoid Go-module-network flakiness; `molecule converge` runs it locally. |
+| **Ansible role: honeypot** | ansible-lint | render check | **molecule** + idempotence | verifies service active, listener bound to configured port, script installed. |
+| **Ansible role: probe-ratelimit** | ansible-lint | render check | **molecule** + idempotence | verifies daemon script + systemd unit + active state. nftables `probe_offenders` set is exercised in the full-stack scenario. |
+| **Ansible role: warp-outbound** | ansible-lint | render check | **molecule (syntax-only sequence)** | Cloudflare WARP installer expects systemd-networkd + a registerable endpoint not available in CI; structure validation only. |
+| **Full stack** | ansible-lint | render check | **molecule (full-stack scenario)** | runs the entire `site.yml` end-to-end inside a privileged Debian-13 container with NET_ADMIN; verifies every enabled service is up + listening. See `ansible/molecule/full-stack/`. |
 | **Shell scripts (16)** | `bash -n` syntax + **`shellcheck -s bash -S warning`** (CI) | n/a | n/a | every script in `scripts/` runs through shellcheck. |
 | **Python validators** | implicit — they validate everything else | n/a | n/a | |
 | **Secrets schema** | **`scripts/check-secrets-coverage.py`** | n/a | n/a | Walks every Jinja2 template, ensures every top-level variable is declared in `secrets/prod.secrets.example.yaml`, `group_vars/all.yml`, or a role's `defaults/main.yml`. |
@@ -38,7 +42,7 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 | Operator step | Tests that protect it |
 |---|---|
 | `git commit` (local) | pre-commit hooks: gitleaks, terraform fmt, ansible-lint, yamllint, **shellcheck**, **secrets-coverage**, **templates-render** |
-| `git push` (PR) | CI matrix: terraform fmt+validate (3 providers), cloud-init schema, ansible-lint + syntax, **9 molecule scenarios**, shellcheck, secrets-coverage, templates-render, yamllint, gitleaks |
+| `git push` (PR) | CI matrix: terraform fmt+validate (3 providers), cloud-init schema, ansible-lint + syntax, **all 15 role + 1 full-stack molecule scenarios**, shellcheck, secrets-coverage, templates-render, yamllint, gitleaks |
 | `make validate` (operator) | terraform fmt + validate + gitleaks + ansible-lint + ansible syntax-check |
 | `make validate-target` | live probe of REALITY target (TLS / H2 / SAN / uTLS / template OPSEC) |
 | `make plan` | terraform plan (catches infrastructure drift) |

@@ -1,0 +1,23 @@
+---
+- name: Verify probe-ratelimit role
+  hosts: all
+  become: true
+  tasks:
+    - name: Daemon script installed and executable
+      ansible.builtin.stat:
+        path: /usr/local/bin/probe-ratelimit.py
+      register: scr
+      failed_when: not scr.stat.exists or not scr.stat.executable
+
+    - name: systemd unit installed
+      ansible.builtin.stat:
+        path: /etc/systemd/system/probe-ratelimit.service
+      register: unit
+      failed_when: not unit.stat.exists
+
+    - name: Service is active
+      ansible.builtin.command:
+        cmd: systemctl is-active probe-ratelimit.service
+      register: svc
+      changed_when: false
+      failed_when: svc.stdout != "active"

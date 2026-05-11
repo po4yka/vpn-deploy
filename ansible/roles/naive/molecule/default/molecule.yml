@@ -1,0 +1,45 @@
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ../../../../requirements.yml
+
+driver:
+  name: docker
+
+platforms:
+  - name: vpn-naive-debian13
+    image: geerlingguy/docker-debian13-ansible:latest
+    pre_build_image: true
+    privileged: true
+    command: /lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../..
+  inventory:
+    host_vars:
+      vpn-naive-debian13:
+        ansible_user: root
+  config_options:
+    defaults:
+      callback_result_format: yaml
+
+verifier:
+  name: ansible
+
+# The naive role builds Caddy with xcaddy from source — that needs Go
+# and network. We skip converge in the standard CI sequence and run
+# only syntax + create + destroy. Use `molecule converge` manually to
+# exercise the full build path locally.
+scenario:
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - destroy
