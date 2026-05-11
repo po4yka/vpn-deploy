@@ -10,6 +10,14 @@ Reads $VPN_SECRETS_FILE (set by `make decrypt`) or the path passed as
 the first argument. Exits 0 on clean; non-zero on any finding.
 
 Run via `make spot-check-secrets`.
+
+INVARIANT: a Finding's `msg` field MUST NEVER contain a substring of any
+value read from the decrypted secrets file. Operators redirect this
+output to log files and shell history; logging secret bytes there
+defeats the SOPS-at-rest model. Every f.add() call site is required to
+produce a value-independent diagnostic — length, type, or a fixed
+sentinel like "placeholder still present". The CodeQL rule
+py/clear-text-logging-sensitive-data enforces this at PR time.
 """
 
 from __future__ import annotations
@@ -45,9 +53,13 @@ class Findings:
 
 
 def walk_for_placeholders(data, path: str, f: Findings) -> None:
+    # Walks values that came out of a decrypted secrets blob; we must never
+    # let the value or any prefix of it reach the message buffer (it ends
+    # up in stdout / journal / log file, defeating the SOPS-at-rest model).
+    # Findings carry only the field path + a fixed diagnostic.
     if isinstance(data, str):
         if PLACEHOLDER_RE.search(data):
-            f.add(path, f"placeholder still present ({data[:40]!r})")
+            f.add(path, "placeholder still present (run bootstrap-secrets / sops to fill)")
     elif isinstance(data, dict):
         for k, v in data.items():
             walk_for_placeholders(v, f"{path}.{k}" if path else k, f)
@@ -141,8 +153,11 @@ def main() -> int:
     for client in xray.get("clients") or []:
         sid = client.get("short_id", "")
         if not re.fullmatch(r"[0-9a-fA-F]{2,16}", sid):
+            # short_id is a per-device credential; report only its length
+            # and whether it parsed as hex, never the value itself.
+            kind = "non-hex" if not re.fullmatch(r"[0-9a-fA-F]*", sid) else "wrong-length"
             f.add(f"xray.clients[{client.get('name','?')}].short_id",
-                  f"not hex / wrong length ({sid!r})")
+                  f"{kind} (length={len(sid)}; want 2-16 hex)")
 
     for role, key in (("nginx_xhttp", "key_pem"),
                       ("hysteria", "key_pem"),
@@ -155,7 +170,10 @@ def main() -> int:
     for h in ("h1", "h2", "h3", "h4"):
         v = awg.get(h)
         if not isinstance(v, int) or v == 0:
-            f.add(f"amneziawg_secrets.{h}", f"expected non-zero int, got {v!r}")
+            # AmneziaWG H values are part of per-cohort obfuscation; never
+            # echo. Report only the type/zero condition.
+            cond = "missing" if v is None else ("zero" if v == 0 else f"non-int ({type(v).__name__})")
+            f.add(f"amneziawg_secrets.{h}", f"expected non-zero int, got {cond}")
 
     for client in (data.get("hysteria") or {}).get("clients") or []:
         pw = client.get("password", "")
