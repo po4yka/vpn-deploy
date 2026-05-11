@@ -1,11 +1,16 @@
 output "server_ipv4" {
   value       = [for ni in upcloud_server.vpn.network_interface : ni.ip_address if ni.type == "public" && ni.ip_address_family == "IPv4"][0]
-  description = "Public IPv4 address."
+  description = "Public IPv4 address (primary)."
 }
 
 output "server_ipv6" {
   value       = try([for ni in upcloud_server.vpn.network_interface : ni.ip_address if ni.type == "public" && ni.ip_address_family == "IPv6"][0], null)
   description = "Public IPv6 address (may be null if disabled)."
+}
+
+output "honeypot_ipv4" {
+  value       = try([for ni in upcloud_server.vpn.network_interface : ni.ip_address if ni.type == "public" && ni.ip_address_family == "IPv4"][1], null)
+  description = "Secondary public IPv4 used by the honeypot when additional_public_ip = true. Null when not allocated."
 }
 
 output "admin_user" {

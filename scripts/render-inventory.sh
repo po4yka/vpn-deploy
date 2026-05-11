@@ -77,9 +77,18 @@ for i in "${!host_pairs[@]}"; do
   user="$(terraform -chdir="$tf_dir" output -raw admin_user)"
   hostname="$(terraform -chdir="$tf_dir" output -raw server_hostname)"
   allowed_ssh_cidrs="$(terraform_json_var "$tf_dir" "$tfvars_rel" "var.allowed_ssh_cidrs")"
+  # Optional secondary public IP for the honeypot role. Surfaces as a
+  # host var so the role binds the canary listener to a dedicated
+  # address rather than 0.0.0.0. Null when additional_public_ip is
+  # false in the terraform vars.
+  honey_ip="$(terraform -chdir="$tf_dir" output -raw honeypot_ipv4 2>/dev/null || true)"
 
   vpn_line="${hostname} ansible_host=${ip} ansible_user=${user} provider=${prov} env=${env}"
   vpn_line+=" allowed_ssh_cidrs=${allowed_ssh_cidrs}"
+  if [[ -n "$honey_ip" && "$honey_ip" != "null" ]] \
+     && [[ "$honey_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    vpn_line+=" honeypot_listen_addr=${honey_ip}"
+  fi
   vpn_lines+=("$vpn_line")
 
   if [[ -n "${cohort_list[$i]:-}" ]]; then

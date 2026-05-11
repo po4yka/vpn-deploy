@@ -29,6 +29,7 @@ import threading
 import time
 from collections import deque
 
+LISTEN_ADDR = "{{ honeypot.listen_addr | default('0.0.0.0') }}"
 LISTEN_PORT = {{ honeypot.port }}
 LOG_DIR = pathlib.Path("{{ honeypot.log_dir }}")
 TEXTFILE_DIR = pathlib.Path("{{ honeypot.textfile_dir }}")
@@ -174,9 +175,12 @@ def main() -> None:
     threading.Thread(target=_flush_loop, daemon=True).start()
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind(("0.0.0.0", LISTEN_PORT))
+    # Bind to the configured listen address (default 0.0.0.0). With a
+    # dedicated secondary IP this isolates honeypot probes from real
+    # transport traffic at the IP-reputation level.
+    s.bind((LISTEN_ADDR, LISTEN_PORT))
     s.listen(128)
-    logging.info("honeypot listening on 0.0.0.0:%d", LISTEN_PORT)
+    logging.info("honeypot listening on %s:%d", LISTEN_ADDR, LISTEN_PORT)
     while True:
         conn, addr = s.accept()
         threading.Thread(target=_handle, args=(conn, addr), daemon=True).start()

@@ -40,6 +40,16 @@ resource "upcloud_server" "vpn" {
     type = "public"
   }
 
+  # Optional secondary public interface for honeypot / per-IP isolation.
+  # Enable via `additional_public_ip = true` in the env tfvars; the
+  # honeypot role binds to this address via group_vars when populated.
+  dynamic "network_interface" {
+    for_each = var.additional_public_ip ? [1] : []
+    content {
+      type = "public"
+    }
+  }
+
   network_interface {
     type = "utility"
   }

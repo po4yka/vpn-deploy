@@ -65,3 +65,14 @@ variable "labels" {
   type    = map(string)
   default = {}
 }
+
+variable "additional_public_ip" {
+  type        = bool
+  default     = false
+  description = <<EOT
+Allocate a second public IPv4 to this server. Used by the honeypot
+role (vpn.enable_honeypot) so the canary listener can bind to an IP
+that has no other service on it, separating its probe traffic from
+the real REALITY listener at the IP-reputation level. Off by default.
+EOT
+}
