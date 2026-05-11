@@ -18,7 +18,8 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         audit-permissions asn-drift check-ip-reputation issue-bootstrap \
         test-tls-policing fleet-status drift-since-tag fleet-rotate \
         watch-spare promote-spare probing-summary tspu-canary \
-        emit-sbom molecule-full-stack audit-log audit-log-append
+        emit-sbom molecule-full-stack audit-log audit-log-append \
+        setup-yubikey
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -76,6 +77,7 @@ help:
 	@echo "  molecule-full-stack      Run site.yml end-to-end inside a Docker container"
 	@echo "  audit-log                Decrypt and print the credential-issuance audit log"
 	@echo "  audit-log-append ACTION=…  Append a record to the audit log (operator-driven)"
+	@echo "  setup-yubikey [REENCRYPT=1]  Provision an age identity on a YubiKey (PIV)"
 	@echo "  verify TAG_ON_SUCCESS=1  Tag current commit as vpn-deploy-known-good-* after verify"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
@@ -279,6 +281,9 @@ audit-log-append:
 	  --action $(ACTION) \
 	  $(if $(CLIENT),--client $(CLIENT)) \
 	  $(if $(NOTE),--note "$(NOTE)")
+
+setup-yubikey:
+	./scripts/setup-yubikey-age.sh $(if $(filter 1 yes true,$(REENCRYPT)),--reencrypt)
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \

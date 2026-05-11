@@ -27,6 +27,33 @@ grep '^# public key:' ~/.config/vpn-provision/age.key | awk '{print $4}'
 # → age1xyz…  (this is your "recipient")
 ```
 
+### Hardware-backed age (YubiKey PIV applet)
+
+For high-value operator workstations, replace the software age key
+with a YubiKey-backed identity via the `age-plugin-yubikey` plugin.
+The encrypted SOPS blob stays useless to anyone without physical
+access to the YubiKey, even if they have the file.
+
+```bash
+scripts/setup-yubikey-age.sh              # generate + print recipient
+scripts/setup-yubikey-age.sh --reencrypt  # also `sops updatekeys` every blob
+```
+
+Migration discipline:
+
+1. Generate the YubiKey identity and add its recipient as a SECOND
+   recipient on every SOPS blob — do not yet remove the software
+   recipient.
+2. Verify decryption from `SOPS_AGE_KEY_FILE=…yubikey-identity.txt`
+   on every operator workstation that needs it.
+3. Once verified everywhere, remove the software recipient via
+   `sops updatekeys` per blob. Skipping step 2 means losing access
+   the moment the software key is rotated out.
+
+`scripts/setup-yubikey-age.sh` does steps 1 and 3 explicitly; step
+2 (verification) is left to the operator because failure modes are
+human-specific (forgot the PIN, slot wasn't the one expected, etc.).
+
 Encrypt against one or more recipients (multiple operators):
 
 ```bash
