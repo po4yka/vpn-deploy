@@ -1,0 +1,55 @@
+---
+# Failure-injection scenario.
+#
+# default/ proves the watchdog probes happy-path (everything green); this
+# scenario proves the alert path fires when a probe goes red:
+#
+#   1. xray is not installed → `systemctl is-active xray` fails
+#   2. fail_threshold = 1 → first probe triggers an alert
+#   3. ntfy.sh URL is redirected to a local stub HTTP listener
+#   4. verify.yml runs vpn-watchdog.sh once and asserts the stub
+#      received the alert with the expected title shape
+#
+# This is the test the previous golden-path scenarios were missing.
+
+dependency:
+  name: galaxy
+  options:
+    requirements-file: ../../../../requirements.yml
+
+driver:
+  name: docker
+
+platforms:
+  - name: vpn-watchdog-failure-debian13
+    image: geerlingguy/docker-debian13-ansible:latest
+    pre_build_image: true
+    privileged: true
+    command: /lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    cgroupns_mode: host
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_ROLES_PATH: ../../..
+  inventory:
+    host_vars:
+      vpn-watchdog-failure-debian13:
+        ansible_user: root
+
+verifier:
+  name: ansible
+
+# No idempotence stage — the watchdog timer + state file change between
+# the two passes, so a second converge legitimately diverges.
+scenario:
+  test_sequence:
+    - dependency
+    - syntax
+    - create
+    - prepare
+    - converge
+    - verify
+    - destroy

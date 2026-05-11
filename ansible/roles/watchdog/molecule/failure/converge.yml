@@ -1,0 +1,103 @@
+---
+- name: Converge watchdog role under simulated xray outage
+  hosts: all
+  become: true
+  vars:
+    xray_log_dir: /var/log/xray
+    vpn:
+      enable_xray_reality: true     # → probes systemctl is-active xray
+      enable_nginx_xhttp: false
+      enable_hysteria: false
+      enable_amneziawg: false
+    amneziawg:
+      interface: awg0
+    xray_port: 443
+    hysteria_port: 443
+    watchdog:
+      interval: "5min"
+      fail_threshold: 1            # first failed probe → alert
+      state_file: /var/lib/vpn-watchdog/state
+      alerts_per_hour_max: 4
+      provider: ntfy
+      ntfy_url: "http://127.0.0.1:18080"   # local stub listener
+    watchdog_secrets:
+      ntfy_topic: "molecule-failure-topic"
+
+  pre_tasks:
+    - name: Install curl + python3 (stub listener + alert delivery)
+      ansible.builtin.apt:
+        name: [curl, python3]
+        state: present
+        update_cache: true
+
+    # Stub ntfy listener: a 30-line http.server that records every POST
+    # body to /tmp/ntfy-stub.log. Started via systemd-run so it survives
+    # the play; killed by destroy.
+    - name: Drop stub ntfy listener
+      ansible.builtin.copy:
+        dest: /usr/local/sbin/ntfy-stub.py
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/usr/bin/env python3
+          import json
+          import pathlib
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+
+          LOG = pathlib.Path("/tmp/ntfy-stub.log")
+
+          class H(BaseHTTPRequestHandler):
+              def log_message(self, *a, **k): pass
+              def do_POST(self):  # noqa: N802
+                  n = int(self.headers.get("Content-Length", "0"))
+                  body = self.rfile.read(n).decode("utf-8", "replace")
+                  rec = {
+                      "path": self.path,
+                      "title": self.headers.get("Title", ""),
+                      "tags": self.headers.get("Tags", ""),
+                      "priority": self.headers.get("Priority", ""),
+                      "body": body,
+                  }
+                  with LOG.open("a") as fh:
+                      fh.write(json.dumps(rec) + "\n")
+                  self.send_response(200)
+                  self.end_headers()
+                  self.wfile.write(b"ok")
+
+          if __name__ == "__main__":
+              HTTPServer(("127.0.0.1", 18080), H).serve_forever()
+
+    - name: Truncate stub log so verify reads only this run's alerts
+      ansible.builtin.copy:
+        dest: /tmp/ntfy-stub.log
+        content: ""
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Drop stub-listener systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/ntfy-stub.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Test stub for ntfy POST capture
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/python3 /usr/local/sbin/ntfy-stub.py
+          Restart=on-failure
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start stub listener
+      ansible.builtin.systemd_service:
+        name: ntfy-stub.service
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  roles:
+    - role: watchdog
