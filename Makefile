@@ -15,7 +15,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
         molecule-test smoke-test validate-target scan-targets blue-green \
         spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
-        audit-permissions asn-drift check-ip-reputation
+        audit-permissions asn-drift check-ip-reputation issue-bootstrap
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -60,6 +60,7 @@ help:
 	@echo "  audit-permissions    Local FS audit: age key 0600, no stray plaintext, etc."
 	@echo "  asn-drift            Detect ASN drift on the deployed VPS IP, alert via ntfy"
 	@echo "  check-ip-reputation  Spamhaus / FireHOL / AbuseIPDB (key opt) check; alert via ntfy"
+	@echo "  issue-bootstrap CLIENT=…  Issue a one-time /bootstrap/<token> URL"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
@@ -206,6 +207,10 @@ asn-drift:
 
 check-ip-reputation:
 	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/check-ip-reputation.sh
+
+issue-bootstrap:
+	@test -n "$(CLIENT)" || { echo "usage: make issue-bootstrap CLIENT=phone"; exit 1; }
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/issue-bootstrap.sh $(CLIENT)
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
