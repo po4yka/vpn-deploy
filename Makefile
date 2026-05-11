@@ -17,7 +17,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
         audit-permissions asn-drift check-ip-reputation issue-bootstrap \
         test-tls-policing fleet-status drift-since-tag fleet-rotate \
-        watch-spare promote-spare probing-summary
+        watch-spare promote-spare probing-summary tspu-canary
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -70,6 +70,7 @@ help:
 	@echo "  watch-spare              Cron: probe blue, push OTP-gated promote alert on failure"
 	@echo "  promote-spare OTP=…      Consume the pending OTP and swing traffic to GREEN_ENV"
 	@echo "  probing-summary          7-day Xray/nginx/honeypot rollup as Markdown + .prom"
+	@echo "  tspu-canary              Daily TSPU rule-drift probes (run from in-cohort box)"
 	@echo "  verify TAG_ON_SUCCESS=1  Tag current commit as vpn-deploy-known-good-* after verify"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
@@ -254,6 +255,9 @@ promote-spare:
 
 probing-summary:
 	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/probing-summary.sh
+
+tspu-canary:
+	./scripts/tspu-canary.sh
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
