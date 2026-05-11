@@ -26,6 +26,7 @@ secrets/*
 !secrets/README.md
 !secrets/.gitkeep
 !secrets/prod.secrets.example.yaml
+!secrets/.sops.yaml.example
 .env
 .envrc
 *.key

@@ -53,6 +53,8 @@ Switch via `make PROVIDER=upcloud …`.
     (RTK South, MTS/Beeline/MegaFon).
 13. `docs/MULTI-COHORT.md` — multiple VLESS+REALITY inbounds per host,
     each with its own port/flow_mode/finalmask/clients.
+14. `docs/MULTI-OPERATOR.md` — per-scope SOPS rules, role-scoped secrets
+    files, audit-log boundaries.
 
 Operational runbooks: `docs/RUNBOOK-{rotate,rollback,incident,restore,add-fallback}.md`.
 
