@@ -16,7 +16,8 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         molecule-test smoke-test validate-target scan-targets blue-green \
         spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
         audit-permissions asn-drift check-ip-reputation issue-bootstrap \
-        test-tls-policing fleet-status drift-since-tag fleet-rotate
+        test-tls-policing fleet-status drift-since-tag fleet-rotate \
+        watch-spare promote-spare
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -66,6 +67,8 @@ help:
 	@echo "  fleet-status [HOSTS=…]   Summary table across every host:env pair"
 	@echo "  drift-since-tag          Diff fleet against last vpn-deploy-known-good-* tag"
 	@echo "  fleet-rotate PLAN=…      Coordinated rotation across the fleet (--dry-run / --resume)"
+	@echo "  watch-spare              Cron: probe blue, push OTP-gated promote alert on failure"
+	@echo "  promote-spare OTP=…      Consume the pending OTP and swing traffic to GREEN_ENV"
 	@echo "  verify TAG_ON_SUCCESS=1  Tag current commit as vpn-deploy-known-good-* after verify"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
@@ -240,6 +243,13 @@ fleet-rotate:
 	./scripts/fleet-rotate.sh --plan $(PLAN) \
 	  $(if $(filter 1 yes true,$(RESUME)),--resume) \
 	  $(if $(filter 1 yes true,$(DRY_RUN)),--dry-run)
+
+watch-spare:
+	PROVIDER=$(PROVIDER) BLUE_ENV=$(ENV) ./scripts/warm-spare-watcher.sh
+
+promote-spare:
+	@test -n "$(OTP)" || { echo "usage: make promote-spare OTP=<value>"; exit 1; }
+	PROVIDER=$(PROVIDER) BLUE_ENV=$(ENV) ./scripts/promote-spare.sh $(OTP)
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
