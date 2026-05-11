@@ -44,6 +44,13 @@ Switch via `make PROVIDER=upcloud …`.
 6. `docs/TESTING.md` — coverage matrix and what's intentionally not tested.
 7. `docs/BRANCH-PROTECTION.md` — apply required-status-check rules via GH API.
 8. `docs/RUNBOOK-deploy.md` — full deploy procedure.
+9. `docs/CLIENT-NOTES.md` — client-side bugs and version pins (AWG #2457,
+   sing-box NaiveProxy padding leak, NaiveProxy v147 preamble).
+10. `docs/SUBSCRIPTION-PLANE.md` — gap matrix against the wiki spec.
+11. `docs/XRAY-RELEASE-LINE.md` — Xray-core 2026 release-line tracker
+    (v26.2.6 → v26.5.3) with breaking-change notes for upgrades.
+12. `docs/AWG-COHORTS.md` — AmneziaWG cohort obfuscation profiles
+    (RTK South, MTS/Beeline/MegaFon).
 
 Operational runbooks: `docs/RUNBOOK-{rotate,rollback,incident,restore,add-fallback}.md`.
 
