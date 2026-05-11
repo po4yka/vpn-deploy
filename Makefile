@@ -13,7 +13,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
 .PHONY: help init validate plan apply inventory wait decrypt dry-run deploy verify clean \
         rollback-xray rollback-config rotate-credentials check-prereqs \
         destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
-        molecule-test smoke-test validate-target blue-green
+        molecule-test smoke-test validate-target scan-targets blue-green
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -48,7 +48,8 @@ help:
 	@echo "  install-hooks     Install pre-commit hooks for this repo"
 	@echo "  molecule-test ROLE=<name>   Run molecule test for one role"
 	@echo "  smoke-test        End-to-end traffic test through every enabled profile"
-	@echo "  validate-target   Pre-deploy probe of REALITY target (TLS/H2/SAN/uTLS)"
+	@echo "  validate-target   Pre-deploy probe of REALITY target (TLS/H2/SAN/uTLS/ASN)"
+	@echo "  scan-targets {SEEDS=…|CIDR=…|CRAWL=…}  Discover REALITY targets via RealiTLScanner"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
@@ -157,6 +158,22 @@ smoke-test:
 validate-target:
 	@test -f "$(SECRETS_FILE)" || { echo "missing $(SECRETS_FILE) — run 'make decrypt'"; exit 1; }
 	SOPS_FILE=$(SOPS_FILE) ENV=$(ENV) ./scripts/validate-reality-target.sh
+
+scan-targets:
+	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
+	  echo "scan-targets needs one of:"; \
+	  echo "  make scan-targets SEEDS=path/to/seeds.txt"; \
+	  echo "  make scan-targets CIDR=107.172.103.0/24"; \
+	  echo "  make scan-targets CRAWL=https://launchpad.net/ubuntu/+archivemirrors"; \
+	  exit 1; }
+	./scripts/scan-reality-targets.sh \
+	  $(if $(SEEDS),--seeds $(SEEDS)) \
+	  $(if $(CIDR),--cidr $(CIDR)) \
+	  $(if $(CRAWL),--crawl $(CRAWL)) \
+	  $(if $(THREADS),--threads $(THREADS)) \
+	  $(if $(TIMEOUT),--timeout $(TIMEOUT)) \
+	  $(if $(TOP),--top $(TOP)) \
+	  $(if $(VALIDATE),--validate)
 
 blue-green:
 	@test -n "$(GREEN_ENV)" || { echo "GREEN_ENV=<name> required (e.g. green, spare2)"; exit 1; }
