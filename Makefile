@@ -22,7 +22,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         emit-sbom molecule-full-stack audit-log audit-log-append \
         setup-yubikey check-killswitch install-operator-crons \
         remove-operator-crons issue-sub-token sub-reads \
-        test-unit
+        test-unit snapshot-check snapshot-update
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -99,6 +99,8 @@ help:
 	@echo ""
 	@echo "── TEST / CI ──────────────────────────────────────────────────────────"
 	@echo "  test-unit                  Run pytest unit tests (tests/unit/)"
+	@echo "  snapshot-check             Diff every Jinja render against tests/snapshot/golden/"
+	@echo "  snapshot-update            Refresh the goldens (run after intentional change)"
 	@echo "  molecule-test ROLE=<name>  Run one role's molecule scenario"
 	@echo "  molecule-full-stack        site.yml end-to-end inside a Docker container"
 
@@ -209,6 +211,12 @@ install-hooks:
 
 test-unit:
 	python3 -m pytest tests/unit/ -q
+
+snapshot-check:
+	python3 scripts/render-snapshots.py
+
+snapshot-update:
+	python3 scripts/render-snapshots.py --update
 
 molecule-test:
 	@test -n "$(ROLE)" || { echo "ROLE=<role-name> required (e.g. baseline, firewall, xray)"; exit 1; }

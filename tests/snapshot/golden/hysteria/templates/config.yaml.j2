@@ -1,0 +1,33 @@
+
+listen: ":443"
+
+
+tls:
+  cert: /etc/hysteria/server.fullchain.pem
+  key:  /etc/hysteria/server.key
+
+auth:
+  type: userpass
+  userpass:
+
+    phone: "REPLACE_WITH_PER_DEVICE_PASSWORD"
+
+
+# Salamander obfuscation: disabled by default. Enable only if vanilla
+# Hysteria is being classified on the target network — turning it on
+# trades a vanilla-H2 fingerprint for a high-entropy UDP fingerprint,
+# which can itself be a signal.
+
+
+bandwidth:
+  up:   100 mbps
+  down: 200 mbps
+
+masquerade:
+  type: 404
+
+quic:
+  initStreamReceiveWindow: 8388608
+  maxStreamReceiveWindow:  8388608
+  initConnReceiveWindow:   20971520
+  maxConnReceiveWindow:    20971520

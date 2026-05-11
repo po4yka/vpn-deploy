@@ -1,0 +1,93 @@
+#!/usr/sbin/nft -f
+# Managed by Ansible role `firewall`. Hand edits will be overwritten.
+
+flush ruleset
+
+
+
+
+
+
+
+
+
+
+table inet filter {
+
+
+
+
+  chain input {
+    type filter hook input priority 0;
+    policy drop;
+
+    iif "lo" accept
+    ct state established,related accept
+    ct state invalid drop
+
+
+    ip protocol icmp accept
+    ip6 nexthdr ipv6-icmp accept
+
+
+    tcp dport 22 ip saddr { 198.51.100.42/32 } accept
+
+
+
+
+    # P0 — REALITY over TCP
+
+    tcp dport 443 accept
+
+
+
+
+
+    # P1 — nginx-xhttp public HTTPS listener
+    tcp dport 8443 accept
+
+
+
+    # P2 — Hysteria2 UDP
+    udp dport 443 accept
+
+
+
+
+
+
+    # P2 — AmneziaWG (default UDP/51820; override via group_vars if needed)
+    udp dport 51820 accept
+
+
+
+
+
+
+
+    counter drop
+  }
+
+  chain forward {
+    type filter hook forward priority 0;
+
+    policy accept;
+    iifname "awg0" accept
+    oifname "awg0" accept
+
+  }
+
+  chain output {
+    type filter hook output priority 0;
+    policy accept;
+  }
+}
+
+
+table inet nat {
+  chain postrouting {
+    type nat hook postrouting priority 100;
+    iifname "awg0" oifname != "awg0" masquerade
+  }
+}
+

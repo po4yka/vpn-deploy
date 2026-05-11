@@ -63,3 +63,10 @@ repos:
         entry: python3 scripts/pre-commit-placeholder-scan.py
         language: system
         types: [text]
+
+      - id: snapshot-check
+        name: snapshot-check (Jinja renders match tests/snapshot/golden/)
+        entry: python3 scripts/render-snapshots.py
+        language: system
+        pass_filenames: false
+        files: ^(ansible/.*\.j2|ansible/group_vars/.*\.yml|ansible/roles/.*/defaults/main\.yml|secrets/prod\.secrets\.example\.yaml|tests/snapshot/golden/.*)$

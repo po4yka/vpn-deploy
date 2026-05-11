@@ -1,0 +1,42 @@
+# Cloudflare-fronted nginx vhost for Xray XHTTP. See
+# docs/CDN-DECISION.md for the threat-model boundary on when CDN is
+# worth running.
+
+# CF prefix files refreshed by /etc/cron.daily/cdn-front-refresh-cf-prefixes
+include /etc/cdn-front/cloudflare.real_ip;
+
+server {
+    listen 8443 ssl http2;
+    listen [::]:8443 ssl http2;
+
+    server_name {{ nginx_xhttp.server_name }};
+
+    ssl_certificate     /etc/nginx/tls/{{ nginx_xhttp.server_name }}.fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/{{ nginx_xhttp.server_name }}.key;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+
+
+    # XHTTP upstream — proxy_pass to the Xray localhost inbound. nginx
+    # rewrites X-Forwarded-For from CF-Connecting-IP via the real-IP
+    # restoration above, so Xray sees the visitor IP, not the CF egress.
+    location {{ xray.xhttp_path | default('/app-sync') }} {
+        proxy_pass http://127.0.0.1:{{ nginx_xhttp_port | default(10085) }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_buffering off;
+        proxy_read_timeout 360s;
+        proxy_send_timeout 360s;
+    }
+
+    # Reject anything else with 444 (drop without response). The CDN
+    # never proxies non-XHTTP paths to us, so a request that lands
+    # here is by definition off-script.
+    location / {
+        return 444;
+    }
+}

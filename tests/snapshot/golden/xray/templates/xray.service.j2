@@ -1,0 +1,26 @@
+[Unit]
+Description=Xray Service
+Documentation=https://xtls.github.io/
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+User=xray
+Group=xray
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+
+ExecStart=/usr/local/bin/xray run -config {{ xray_config_dir | default('/etc/xray') }}/config.json
+Restart=on-failure
+RestartSec=5s
+
+LimitNOFILE=1048576
+
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths={{ xray_log_dir | default('/var/log/xray') }} /var/lib/xray {{ xray_config_dir | default('/etc/xray') }}
+
+[Install]
+WantedBy=multi-user.target

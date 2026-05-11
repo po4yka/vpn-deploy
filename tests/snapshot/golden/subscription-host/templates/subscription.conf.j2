@@ -1,0 +1,51 @@
+# Subscription delivery host. Listens on a non-default port to keep the
+# transport endpoint and the delivery endpoint topologically separated.
+
+server {
+    listen 8444 ssl http2;
+    listen [::]:8444 ssl http2;
+
+    server_name vpn.example.com;
+
+    ssl_certificate     /etc/nginx/tls/vpn.example.com.fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/vpn.example.com.key;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header Cache-Control "no-store" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    # Long-lived /sub/<token>. Proxied to the local vpn-bootstrap
+    # service, which:
+    #   * hashes the URL token with sha256
+    #   * reads payload from <subscription_dir>/sub/<hash>
+    #   * checks <hash>.meta for expiry
+    #   * consults the revocation file
+    #   * writes a read-audit JSONL record
+    # nginx fronts only TLS + rate-limit.
+    location ~ "^/sub/(?<vpn_sub_token>[A-Za-z0-9_-]{16,64})$" {
+        limit_req zone=vpn_sub_per_ip burst=3 nodelay;
+        limit_req_status 429;
+
+        proxy_pass http://127.0.0.1:8445;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+
+        # Make Cache-Control / Referrer-Policy explicit at the location
+        # level — see /bootstrap/ for the inheritance-reset rationale.
+        add_header Cache-Control "no-store"     always;
+        add_header Referrer-Policy "no-referrer" always;
+
+        access_log off;
+    }
+
+
+
+    # Reject everything else.
+    location / {
+        return 404;
+    }
+
+    error_log /var/log/nginx/vpn-sub.error.log warn;
+}

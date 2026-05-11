@@ -26,9 +26,15 @@ ALLOWLIST = {
     "scripts/check-secrets-coverage.py",
     "scripts/check-templates-render.py",
     "scripts/pre-commit-placeholder-scan.py",
+    "scripts/render-snapshots.py",
     "docs/QUICKSTART.md",
     "docs/SECRETS.md",
 }
+
+# Path prefixes whose contents legitimately echo the schema placeholders.
+ALLOW_PREFIXES = (
+    "tests/snapshot/golden/",
+)
 
 NEEDLE = re.compile(r"REPLACE_WITH_[A-Z0-9_]+")
 
@@ -37,6 +43,8 @@ def main(args: list[str]) -> int:
     offenders: list[tuple[str, str]] = []
     for arg in args:
         if arg in ALLOWLIST:
+            continue
+        if any(arg.startswith(prefix) for prefix in ALLOW_PREFIXES):
             continue
         p = Path(arg)
         if not p.is_file():
