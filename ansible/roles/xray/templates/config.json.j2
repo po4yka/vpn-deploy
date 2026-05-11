@@ -139,7 +139,19 @@
     {
       "tag": "dns-out",
       "protocol": "dns"
-    }
+    }{% if (vpn.enable_warp_outbound | default(false)) and ((vpn.warp_outbound_routes | default([])) | length > 0) %},
+    {
+      "tag": "warp-out",
+      "protocol": "socks",
+      "settings": {
+        "servers": [
+          {
+            "address": "127.0.0.1",
+            "port": {{ warp_outbound.socks_port | default(40000) }}
+          }
+        ]
+      }
+    }{% endif %}
   ],
   "routing": {
     "domainStrategy": "IPIfNonMatch",
@@ -179,6 +191,18 @@
         ],
         "outboundTag": "block"
       },
+      {% if (vpn.enable_warp_outbound | default(false)) and ((vpn.warp_outbound_routes | default([])) | length > 0) %}
+      {%- for r in vpn.warp_outbound_routes %}
+      {
+        "type": "field",
+        "comment": "WARP split-hop egress rule #{{ loop.index }}",
+        {%- for k, v in r.items() %}
+        {{ k | to_json }}: {{ v | to_json }},
+        {%- endfor %}
+        "outboundTag": "warp-out"
+      },
+      {%- endfor %}
+      {% endif %}
       {
         "type": "field",
         "comment": "Default — direct freedom outbound with UseIP strategy",

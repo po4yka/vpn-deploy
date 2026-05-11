@@ -24,6 +24,22 @@ vpn:
                                   # Prometheus textfile metrics. See
                                   # roles/honeypot/defaults/main.yml.
   enable_warp_outbound: false     # opt-in; installs Cloudflare WARP CLI
+                                  # in SOCKS5 mode on 127.0.0.1:40000.
+                                  # See vpn.warp_outbound_routes below
+                                  # for the xray routing hook.
+
+  # When enable_warp_outbound is true AND this list is non-empty, the
+  # xray config gains a SOCKS outbound tagged "warp-out" and routing
+  # rules that send the listed destinations through it. Each entry is a
+  # routing-rule fragment; the role wraps each in {type:"field", …,
+  # outboundTag:"warp-out"}. Use geosite:/geoip: for sets, or "domain"
+  # arrays for explicit allowlists.
+  #
+  # Example for a Netflix-via-WARP cohort:
+  #   warp_outbound_routes:
+  #     - { domain: ["geosite:netflix"] }
+  #     - { ip:     ["geoip:cloudflare"] }
+  warp_outbound_routes: []
                                   # in SOCKS5 proxy mode on 127.0.0.1.
                                   # See roles/warp-outbound for the
                                   # split-hop egress rationale (breaks
