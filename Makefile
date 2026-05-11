@@ -16,7 +16,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         molecule-test smoke-test validate-target scan-targets blue-green \
         spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
         audit-permissions asn-drift check-ip-reputation issue-bootstrap \
-        test-tls-policing fleet-status drift-since-tag
+        test-tls-policing fleet-status drift-since-tag fleet-rotate
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -65,6 +65,7 @@ help:
 	@echo "  test-tls-policing HOST=… Probe the ~12-concurrent-TLS home-ISP rule"
 	@echo "  fleet-status [HOSTS=…]   Summary table across every host:env pair"
 	@echo "  drift-since-tag          Diff fleet against last vpn-deploy-known-good-* tag"
+	@echo "  fleet-rotate PLAN=…      Coordinated rotation across the fleet (--dry-run / --resume)"
 	@echo "  verify TAG_ON_SUCCESS=1  Tag current commit as vpn-deploy-known-good-* after verify"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
@@ -233,6 +234,12 @@ fleet-status:
 drift-since-tag:
 	PROVIDER=$(PROVIDER) ENV=$(ENV) VPN_SECRETS_FILE=$(SECRETS_FILE) \
 	  ./scripts/drift-since-tag.sh
+
+fleet-rotate:
+	@test -n "$(PLAN)" || { echo "usage: make fleet-rotate PLAN=~/.config/vpn-provision/fleet.yaml [RESUME=1] [DRY_RUN=1]"; exit 1; }
+	./scripts/fleet-rotate.sh --plan $(PLAN) \
+	  $(if $(filter 1 yes true,$(RESUME)),--resume) \
+	  $(if $(filter 1 yes true,$(DRY_RUN)),--dry-run)
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
