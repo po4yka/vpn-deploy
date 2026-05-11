@@ -20,7 +20,8 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         test-tls-policing fleet-status drift-since-tag fleet-rotate \
         watch-spare promote-spare probing-summary tspu-canary \
         emit-sbom molecule-full-stack audit-log audit-log-append \
-        setup-yubikey check-killswitch
+        setup-yubikey check-killswitch install-operator-crons \
+        remove-operator-crons
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -81,6 +82,8 @@ help:
 	@echo "  audit-log                Decrypt and print the credential-issuance audit log"
 	@echo "  audit-log-append ACTION=…  Append a record to the audit log (operator-driven)"
 	@echo "  setup-yubikey [REENCRYPT=1]  Provision an age identity on a YubiKey (PIV)"
+	@echo "  install-operator-crons  Install burn-check/asn-drift/etc. into operator's crontab"
+	@echo "  remove-operator-crons   Uninstall the vpn-deploy cron block (idempotent)"
 	@echo "  verify TAG_ON_SUCCESS=1  Tag current commit as vpn-deploy-known-good-* after verify"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
@@ -298,6 +301,13 @@ setup-yubikey:
 check-killswitch:
 	@test -n "$(BUNDLE)" || { echo "usage: make check-killswitch BUNDLE=phone.singbox.json"; exit 1; }
 	python3 ./scripts/check-singbox-killswitch.py $(BUNDLE)
+
+install-operator-crons:
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/install-operator-crons.sh \
+	  $(if $(filter 1 yes true,$(DRY_RUN)),--dry-run)
+
+remove-operator-crons:
+	./scripts/install-operator-crons.sh --remove
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
