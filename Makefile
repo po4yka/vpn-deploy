@@ -19,7 +19,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         test-tls-policing fleet-status drift-since-tag fleet-rotate \
         watch-spare promote-spare probing-summary tspu-canary \
         emit-sbom molecule-full-stack audit-log audit-log-append \
-        setup-yubikey
+        setup-yubikey check-killswitch
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -284,6 +284,10 @@ audit-log-append:
 
 setup-yubikey:
 	./scripts/setup-yubikey-age.sh $(if $(filter 1 yes true,$(REENCRYPT)),--reencrypt)
+
+check-killswitch:
+	@test -n "$(BUNDLE)" || { echo "usage: make check-killswitch BUNDLE=phone.singbox.json"; exit 1; }
+	python3 ./scripts/check-singbox-killswitch.py $(BUNDLE)
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
