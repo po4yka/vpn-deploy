@@ -21,7 +21,8 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         watch-spare promote-spare probing-summary tspu-canary \
         emit-sbom molecule-full-stack audit-log audit-log-append \
         setup-yubikey check-killswitch install-operator-crons \
-        remove-operator-crons issue-sub-token sub-reads
+        remove-operator-crons issue-sub-token sub-reads \
+        test-unit
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -97,6 +98,7 @@ help:
 	@echo "  emit-sbom                  CycloneDX SBOM of pinned binaries → sbom/<label>.json"
 	@echo ""
 	@echo "── TEST / CI ──────────────────────────────────────────────────────────"
+	@echo "  test-unit                  Run pytest unit tests (tests/unit/)"
 	@echo "  molecule-test ROLE=<name>  Run one role's molecule scenario"
 	@echo "  molecule-full-stack        site.yml end-to-end inside a Docker container"
 
@@ -204,6 +206,9 @@ install-hooks:
 	pip install --user pre-commit
 	pre-commit install
 	pre-commit install --hook-type commit-msg
+
+test-unit:
+	python3 -m pytest tests/unit/ -q
 
 molecule-test:
 	@test -n "$(ROLE)" || { echo "ROLE=<role-name> required (e.g. baseline, firewall, xray)"; exit 1; }

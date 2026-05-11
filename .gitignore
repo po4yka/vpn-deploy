@@ -64,6 +64,9 @@ Thumbs.db
 # pre-commit
 .pre-commit-cache/
 
+# pytest
+.pytest_cache/
+
 # Claude Code local state
 .claude/
 

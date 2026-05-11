@@ -9,3 +9,8 @@ yamllint==1.38.0
 # scripts/check-templates-render.py).
 PyYAML==6.0.3
 Jinja2==3.1.6
+
+# Test layer (pytest unit + snapshot + terraform); molecule already
+# pulls in pytest transitively but we pin the floor here.
+pytest==8.4.0
+jsonschema==4.23.0
