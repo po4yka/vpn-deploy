@@ -29,40 +29,37 @@ so it must be issued, scoped, expirable, and revocable.
 |---|---|---|---|
 | Per-device opaque token | required | partial — one token per `clients[*]` | ✓ shape OK |
 | Token stored as hash, not plaintext | required | plaintext in SOPS-encrypted secrets | secrets are encrypted at rest but the host serves plaintext payloads keyed by plaintext tokens |
-| One-time bootstrap URL | required | not implemented | gap |
+| One-time bootstrap URL | required | `/bootstrap/<token>` via vpn-bootstrap service | ✓ shipped |
 | Scoped payload (per-device profile only) | required | per-device with shared server params | ✓ partial |
-| HTTPS endpoint with no access log of paths | required | nginx default access log; per-route log opt-out not enforced | gap |
+| HTTPS endpoint with no access log of paths | required | `access_log off` on `/sub/` and `/bootstrap/` | ✓ shipped |
 | Revocation list | implemented in v1.2 | `subscription.revoked_tokens` | ✓ shipped |
 | Rate-limit | implemented in v1.2 | `subscription.rate_limit` + burst | ✓ shipped |
-| Token expiry per device | required | not implemented (revocation is binary) | gap |
+| Token expiry per device | required | `<token>.meta` sidecar; vpn-bootstrap returns 410 after `expires` | ✓ shipped (bootstrap only — see notes) |
 | Delivery host separate from VPN node | required | colocated with VPN (subscription-host role) | gap — single VPS in v1 |
-| QR bootstrap flow | required | not implemented | gap |
+| QR bootstrap flow | required | `issue-bootstrap.sh --qr` writes a PNG | ✓ shipped |
 | Audit log of token reads | recommended | partial — nginx access log only | gap |
-| No `Referer` / no `cache` | required | nginx default cache-control = none; referrer policy not set | minor |
+| No `Referer` / no `cache` | required | explicit `Cache-Control: no-store` + `Referrer-Policy: no-referrer` on both `/sub/` and `/bootstrap/` | ✓ shipped |
 
 ## What to ship next
 
-In priority order, deltas that are cheap to land:
+The five "ship next" items from earlier iterations are now landed.
+Remaining gaps in priority order:
 
-1. **One-time bootstrap token** — separate URL space `/bootstrap/<tok>`
-   that's deleted after first read. Token stored as hash; payload
-   encrypted-at-rest under a key derivable from the token. Closes the
-   "stolen subscription URL = forever access" hole.
-2. **Per-token expiry** — `subscription.clients[].expires` ISO date;
-   nginx Lua check or sub-vhost rebuild on the date.
-3. **`access_log off`** for the `/s/` and `/bootstrap/` locations,
-   keep only the error log. Removes the URL path from disk logs.
-4. **Referrer-Policy: no-referrer** + `Cache-Control: no-store` on the
-   subscription locations.
-5. **QR bootstrap** — emit a one-time bootstrap URL + QR PNG via
-   `scripts/new-client.sh --emit-bootstrap`. Distribute the QR through
-   a secure channel; QR is consumed once by the client and the
-   bootstrap token is invalidated.
-
-The "delivery host separate from VPN node" gap requires a separate
-provider/VPS and falls out of the v1 single-VPS architecture. See
-`docs/RUNBOOK-add-fallback.md` and `multi-provider-vpn-fleet-2026` for
-the multi-host shape.
+1. **Per-token expiry on `/sub/`** — today's expiry only covers
+   `/bootstrap/` (the Python service that owns its own check). The
+   static-payload `/sub/` location has no expiry mechanism; needs
+   either nginx Lua or moving `/sub/` behind the same Python service.
+2. **Audit log of token reads** — capture which token was consumed
+   when, into an append-only structured log separate from nginx.
+   Useful for forensics after a credential leak.
+3. **Hashed token storage** — payloads under `/var/lib/vpn-sub/<token>`
+   are currently keyed by plaintext token. A hash-keyed layout
+   (`/var/lib/vpn-sub/<sha256(token)>`) would mean disk theft alone
+   doesn't yield usable subscription URLs.
+4. **Delivery host separate from VPN node** — requires a separate
+   provider/VPS and falls out of the v1 single-VPS architecture. See
+   `docs/RUNBOOK-add-fallback.md` and `multi-provider-vpn-fleet-2026`
+   for the multi-host shape.
 
 ## What is NOT a gap
 

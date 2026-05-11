@@ -11,13 +11,30 @@
 #
 # Usage:
 #   PROVIDER=upcloud ENV=prod scripts/issue-bootstrap.sh phone
+#   scripts/issue-bootstrap.sh phone --expires 2026-08-31
+#   scripts/issue-bootstrap.sh phone --qr     # also writes phone.bootstrap.qr.png
 #
 # After the client fetches the URL, the payload is atomically deleted
-# server-side. Subsequent fetches return 410.
+# server-side. Subsequent fetches return 410. If --expires is given, the
+# server returns 410 once the date passes even before any fetch.
 set -euo pipefail
 
 CLIENT="${1:-}"
-[[ -n "$CLIENT" ]] || { echo "usage: $0 <client_name>" >&2; exit 1; }
+[[ -n "$CLIENT" && "$CLIENT" != "-h" && "$CLIENT" != "--help" ]] || {
+  sed -n '2,/^set -euo/p' "$0" | sed '$d' >&2
+  exit 1
+}
+shift
+
+EXPIRES=""
+EMIT_QR=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --expires) EXPIRES="$2"; shift 2 ;;
+    --qr)      EMIT_QR=1; shift ;;
+    *) echo "unknown arg: $1" >&2; exit 1 ;;
+  esac
+done
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROVIDER="${PROVIDER:-upcloud}"
@@ -51,8 +68,29 @@ sub_port="$(SOPS_FILE="${HOME}/.config/vpn-provision/${ENV}.secrets.sops.yaml" \
 printf '%s' "$payload" | ssh "${admin_user}@${server_ip}" \
   "sudo install -o vpn-bootstrap -g vpn-bootstrap -m 0600 /dev/stdin '${remote_path}'"
 
+# Optional sidecar meta file with expiry.
+if [[ -n "$EXPIRES" ]]; then
+  meta="{\"expires\":\"${EXPIRES}\"}"
+  printf '%s' "$meta" | ssh "${admin_user}@${server_ip}" \
+    "sudo install -o vpn-bootstrap -g vpn-bootstrap -m 0600 /dev/stdin '${remote_path}.meta'"
+fi
+
+url="https://${sub_host}:${sub_port}/bootstrap/${token}"
+
 echo
 echo "Bootstrap URL (one-time, copy to client now):"
-echo "  https://${sub_host}:${sub_port}/bootstrap/${token}"
+echo "  $url"
 echo
-echo "The token is consumed on first successful GET — second fetch returns 410."
+echo "Properties:"
+echo "  * consumed on first successful GET (second fetch → 410)"
+if [[ -n "$EXPIRES" ]]; then
+  echo "  * server-side expiry: ${EXPIRES} (410 after that date)"
+fi
+
+if (( EMIT_QR )); then
+  command -v qrencode >/dev/null 2>&1 || {
+    echo "qrencode not installed; skip --qr" >&2; exit 0; }
+  qr_out="${CLIENT}.bootstrap.qr.png"
+  echo "$url" | qrencode -t PNG -o "$qr_out"
+  echo "  * QR rendered: $qr_out"
+fi

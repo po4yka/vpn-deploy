@@ -47,14 +47,48 @@ class Handler(BaseHTTPRequestHandler):
             return
         token = m.group(1)
         path = BOOTSTRAP_DIR / token
+        meta_path = BOOTSTRAP_DIR / f"{token}.meta"
         with _lock:
             try:
                 data = path.read_bytes()
-                path.unlink()
             except FileNotFoundError:
                 logging.info("token %s: unknown or already consumed", token[:8])
                 self.send_error(410, "Gone")
                 return
+            # Optional per-token expiry. The sidecar carries either an ISO
+            # date string or a unix-epoch integer; either is fine.
+            if meta_path.is_file():
+                try:
+                    import json as _json
+                    meta = _json.loads(meta_path.read_text())
+                except (OSError, ValueError):
+                    meta = {}
+                expires = meta.get("expires")
+                if expires is not None:
+                    import datetime as _dt
+                    now = _dt.datetime.now(tz=_dt.timezone.utc)
+                    if isinstance(expires, (int, float)):
+                        exp_dt = _dt.datetime.fromtimestamp(expires, tz=_dt.timezone.utc)
+                    else:
+                        try:
+                            exp_dt = _dt.datetime.fromisoformat(str(expires)).replace(
+                                tzinfo=_dt.timezone.utc)
+                        except ValueError:
+                            exp_dt = None
+                    if exp_dt is not None and exp_dt < now:
+                        logging.info("token %s: expired (%s)", token[:8], expires)
+                        # Atomically remove both to prevent re-serving.
+                        try: path.unlink()
+                        except FileNotFoundError: pass
+                        try: meta_path.unlink()
+                        except FileNotFoundError: pass
+                        self.send_error(410, "Gone")
+                        return
+            # Atomic consume: delete payload first, then meta (best-effort).
+            path.unlink()
+            if meta_path.is_file():
+                try: meta_path.unlink()
+                except FileNotFoundError: pass
         logging.info("token %s: consumed (%d bytes)", token[:8], len(data))
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
