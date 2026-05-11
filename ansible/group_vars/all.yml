@@ -45,6 +45,12 @@ xray_port: 443
 nginx_xhttp_public_port: 8443 # public nginx listener; direct-only cohorts may override to 443
 nginx_xhttp_port: 10085       # localhost-only Xray XHTTP inbound behind nginx
 hysteria_port: 443
+# Optional Hysteria2 port-hopping. When set to a "low-high" string
+# (e.g. "20000-40000") the role opens that UDP range in nftables, the
+# server listens on it, and emit-singbox.sh writes server_ports +
+# hop_interval into client configs. Empty = no port-hopping.
+hysteria_port_range: ""
+hysteria_hop_interval: "30s"
 
 # Paths
 xray_install_root: /opt/xray

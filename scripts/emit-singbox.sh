@@ -177,6 +177,8 @@ for i in "${!host_pairs[@]}"; do
   xray_server_port="$(jq -r '.xray_port // 443' <<< "$host_json")"
   xhttp_server_port="$(jq -r '.nginx_xhttp_public_port // 443' <<< "$host_json")"
   hysteria_server_port="$(jq -r '.hysteria_port // 443' <<< "$host_json")"
+  hysteria_port_range="$(jq -r '.hysteria_port_range // ""' <<< "$host_json")"
+  hysteria_hop_interval="$(jq -r '.hysteria_hop_interval // "30s"' <<< "$host_json")"
 
   if [[ "$enable_reality" == "true" || "$enable_xhttp" == "true" ]]; then
     client_json="$(jq --arg name "$CLIENT_NAME" '.xray.clients[]? | select(.name==$name)' "$secrets_tmp")"
@@ -258,12 +260,24 @@ for i in "${!host_pairs[@]}"; do
     if [[ "$hy_obfs_enabled" == "true" && -n "$hy_obfs_pw" ]]; then
       obfs_arg="$(jq -n --arg p "$hy_obfs_pw" '{type:"salamander", password:$p}')"
     fi
+    # Port-hopping: sing-box expects ["low:high", ...] in server_ports.
+    hop_ports_arg=null
+    hop_interval_arg=null
+    if [[ -n "$hysteria_port_range" ]]; then
+      hop_lo="${hysteria_port_range%-*}"
+      hop_hi="${hysteria_port_range#*-}"
+      hop_ports_arg="$(jq -nc --arg lh "${hop_lo}:${hop_hi}" '[$lh]')"
+      hop_interval_arg="$(jq -nc --arg i "$hysteria_hop_interval" '$i')"
+    fi
     OUTBOUNDS="$(echo "$OUTBOUNDS" | jq \
       --arg tag "p2-hysteria2-${tag_prefix}" \
       --arg ip "$server_ip" --arg host "$hy_host" --arg pw "$hy_pw" \
       --argjson obfs "$obfs_arg" \
       --argjson port "$hysteria_server_port" \
+      --argjson hop_ports "$hop_ports_arg" \
+      --argjson hop_interval "$hop_interval_arg" \
       '. += [{type:"hysteria2", tag:$tag, server:$ip, server_port:$port,
+              server_ports:$hop_ports, hop_interval:$hop_interval,
               password:$pw, tls:{enabled:true, server_name:$host}, obfs:$obfs}
              | with_entries(select(.value != null))]')"
   fi
