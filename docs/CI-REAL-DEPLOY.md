@@ -31,7 +31,22 @@ against the UpCloud account.
 | `UPCLOUD_PASSWORD` | sub-account password — use a tightly scoped sub-account, NOT the master account |
 | `CI_SOPS_AGE_KEY` | age private key staged onto the runner so any later step needing SOPS works; CI does not commit an encrypted blob |
 | `CI_SSH_PRIVATE_KEY` | SSH key the ephemeral VPS authorises; not reused outside CI |
-| `CI_UPCLOUD_TEMPLATE_UUID` | Debian-13 / Ubuntu-24.04 minimal cloud-image template UUID. List candidates via `upctl storage list --public --template`. |
+| `CI_UPCLOUD_TEMPLATE_UUID` | **Debian 13** minimal cloud-image template UUID. List candidates via `upctl storage list --public --template`. |
+| `CI_UPCLOUD_TEMPLATE_UUID_UBUNTU24` (optional) | **Ubuntu 24.04** minimal cloud-image template UUID. When set, the deploy matrix fans out to both distros in parallel; when empty, the Ubuntu matrix entry skips with a notice and only Debian runs. |
+
+## Matrix fan-out across distros
+
+The deploy job runs as a `strategy.matrix` over `[debian13, ubuntu2404]`.
+Each matrix entry pulls a distinct UpCloud template (the `template_secret_name`
+column above), gets its own concurrency group key (`real-vps-deploy-debian13`
+vs. `real-vps-deploy-ubuntu2404`), and writes its own tfvars file with a
+distro-suffixed env name so the two provisions don't collide on UpCloud
+state. When an operator hasn't populated `CI_UPCLOUD_TEMPLATE_UUID_UBUNTU24`,
+that matrix entry short-circuits at the first step with a GitHub notice
+— no apply, no destroy, no cost.
+
+Cost note: enabling Ubuntu doubles the run minutes + UpCloud credit per
+PR-labeled run. Use the label sparingly.
 
 ## CI secrets generated at runtime
 

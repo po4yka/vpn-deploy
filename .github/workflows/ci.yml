@@ -259,3 +259,32 @@ jobs:
       - name: terraform test
         working-directory: terraform/providers/upcloud
         run: terraform test
+
+  molecule-failure-scenarios:
+    # Non-default Molecule scenarios that exercise red-path / failure
+    # injection. Today: watchdog/failure (stub ntfy listener captures
+    # the alert when xray probes go red). Other roles get an entry
+    # here when they grow their own failure scenario.
+    name: molecule failure (${{ matrix.role }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: watchdog
+            scenario: failure
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6
+        with:
+          python-version: "3.12"
+      - name: Install pinned tooling
+        run: |
+          pip install --require-hashes --no-deps -r requirements.txt
+          ansible-galaxy collection install -r requirements.yml
+      - name: molecule test -s ${{ matrix.scenario }}
+        working-directory: ansible/roles/${{ matrix.role }}
+        run: molecule test -s ${{ matrix.scenario }}
+        env:
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"

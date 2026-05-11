@@ -37,7 +37,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: real-vps-deploy
+  # Distinct group per distro so a Debian fan-out can run alongside an
+  # Ubuntu one. Within a distro, serialise — we still don't want two
+  # parallel provisions for the same template against UpCloud.
+  group: real-vps-deploy-${{ matrix.distro || 'single' }}
   cancel-in-progress: false
 
 jobs:
@@ -49,10 +52,27 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
+    # Cross-distro matrix. Both entries fan out only when their template
+    # secret is populated; an empty template short-circuits the matrix
+    # entry with a warning at the first step (so an operator who hasn't
+    # set CI_UPCLOUD_TEMPLATE_UUID_UBUNTU24 keeps the Debian-only flow).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: debian13
+            template_secret_name: CI_UPCLOUD_TEMPLATE_UUID
+          - distro: ubuntu2404
+            template_secret_name: CI_UPCLOUD_TEMPLATE_UUID_UBUNTU24
+
+    name: real-vps-deploy (${{ matrix.distro }})
+
     env:
       UPCLOUD_USERNAME: ${{ secrets.UPCLOUD_USERNAME }}
       UPCLOUD_PASSWORD: ${{ secrets.UPCLOUD_PASSWORD }}
       ANSIBLE_HOST_KEY_CHECKING: "False"
+      MATRIX_DISTRO: ${{ matrix.distro }}
+      MATRIX_TEMPLATE_UUID: ${{ secrets[matrix.template_secret_name] }}
 
     steps:
       - uses: actions/checkout@v5
@@ -65,9 +85,20 @@ jobs:
           echo "::error::real-vps-deploy will not run on a fork PR — secrets are not exposed to forks."
           exit 1
 
-      - name: Verify required secrets are present
+      - name: Short-circuit when this matrix entry has no template UUID
+        id: gate
         run: |
-          for v in UPCLOUD_USERNAME UPCLOUD_PASSWORD CI_SOPS_AGE_KEY CI_SSH_PRIVATE_KEY CI_UPCLOUD_TEMPLATE_UUID; do
+          if [ -z "${MATRIX_TEMPLATE_UUID:-}" ]; then
+            echo "::notice::${MATRIX_DISTRO} has no template UUID configured (secret ${{ matrix.template_secret_name }} is empty) — skipping this matrix entry."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify required secrets are present
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          for v in UPCLOUD_USERNAME UPCLOUD_PASSWORD CI_SOPS_AGE_KEY CI_SSH_PRIVATE_KEY MATRIX_TEMPLATE_UUID; do
             if [ -z "${!v:-}" ] && [ -z "$(printenv "$v" || true)" ]; then
               echo "::error::Secret $v is unset — configure it in repo settings."
               exit 1
@@ -76,9 +107,9 @@ jobs:
         env:
           CI_SOPS_AGE_KEY: ${{ secrets.CI_SOPS_AGE_KEY }}
           CI_SSH_PRIVATE_KEY: ${{ secrets.CI_SSH_PRIVATE_KEY }}
-          CI_UPCLOUD_TEMPLATE_UUID: ${{ secrets.CI_UPCLOUD_TEMPLATE_UUID }}
 
       - name: Set up tooling
+        if: steps.gate.outputs.skip != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-pip jq age
@@ -90,6 +121,7 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Stage SSH key + age key + CI tfvars
+        if: steps.gate.outputs.skip != 'true'
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh ~/.config/vpn-provision
@@ -99,29 +131,26 @@ jobs:
           ssh-keygen -y -f ~/.ssh/vpn_deploy > ~/.ssh/vpn_deploy.pub
           printf '%s\n' "${{ secrets.CI_SOPS_AGE_KEY }}" > ~/.config/vpn-provision/age.key
           chmod 0600 ~/.config/vpn-provision/age.key
-          # CI tfvars: short-lived ephemeral env name so we never
-          # collide with a real prod state file.
+          # CI tfvars: short-lived ephemeral env name. Distro suffix
+          # keeps the matrix entries' state files / hostnames apart so
+          # we never confuse two parallel provisions.
           ts="$(date -u +%Y%m%d-%H%M%S)"
-          ci_env="ci-${{ github.run_id }}-${ts}"
+          ci_env="ci-${{ github.run_id }}-${MATRIX_DISTRO}-${ts}"
           server_name="vpn-${ci_env}.ci.test"
           echo "CI_ENV=${ci_env}" >> "$GITHUB_ENV"
           echo "CI_SERVER_NAME=${server_name}" >> "$GITHUB_ENV"
-          template_uuid="${{ secrets.CI_UPCLOUD_TEMPLATE_UUID }}"
-          if [ -z "$template_uuid" ]; then
-            echo "::error::CI_UPCLOUD_TEMPLATE_UUID secret is unset — set it to a Debian-13 / Ubuntu-24.04 minimal template UUID in repo settings."
-            exit 1
-          fi
           cat > "terraform/providers/upcloud/environments/${ci_env}.tfvars" <<TFVARS
           server_name          = "${server_name}"
           zone                 = "${{ github.event.inputs.zone || 'fi-hel1' }}"
           plan                 = "1xCPU-2GB"
-          storage_template     = "${template_uuid}"
+          storage_template     = "${MATRIX_TEMPLATE_UUID}"
           admin_ssh_public_key = file("~/.ssh/vpn_deploy.pub")
           allowed_ssh_cidrs    = ["0.0.0.0/0"]
           build_env            = "${ci_env}"
           TFVARS
 
       - name: Generate synthetic CI secrets
+        if: steps.gate.outputs.skip != 'true'
         run: |
           set -euo pipefail
           export SECRETS_FILE="/tmp/vpn-${CI_ENV}.secrets.yaml"
@@ -130,6 +159,7 @@ jobs:
           echo "SECRETS_FILE=$SECRETS_FILE" >> "$GITHUB_ENV"
 
       - name: Deploy
+        if: steps.gate.outputs.skip != 'true'
         run: |
           set -euo pipefail
           export ENV="$CI_ENV"
@@ -151,7 +181,7 @@ jobs:
             ansible-playbook ansible/playbooks/verify.yml --extra-vars "$ANSIBLE_EXTRA_VARS"
 
       - name: Always destroy the ephemeral VPS
-        if: always()
+        if: always() && steps.gate.outputs.skip != 'true'
         run: |
           set -euo pipefail
           export ENV="$CI_ENV"
@@ -161,6 +191,6 @@ jobs:
           echo "yes" | echo "yes" | make destroy || true
 
       - name: Cleanup CI tfvars file
-        if: always()
+        if: always() && steps.gate.outputs.skip != 'true'
         run: |
           rm -f "terraform/providers/upcloud/environments/${CI_ENV}.tfvars" || true
