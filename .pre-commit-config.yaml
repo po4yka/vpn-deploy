@@ -57,3 +57,9 @@ repos:
         language: system
         pass_filenames: false
         files: ^(ansible/.*\.j2|secrets/prod\.secrets\.example\.yaml|ansible/group_vars/.*\.yml)$
+
+      - id: placeholder-scan
+        name: placeholder-scan (no REPLACE_WITH_* outside schema/docs)
+        entry: python3 scripts/pre-commit-placeholder-scan.py
+        language: system
+        types: [text]
