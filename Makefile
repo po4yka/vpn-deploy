@@ -18,7 +18,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         audit-permissions asn-drift check-ip-reputation issue-bootstrap \
         test-tls-policing fleet-status drift-since-tag fleet-rotate \
         watch-spare promote-spare probing-summary tspu-canary \
-        emit-sbom molecule-full-stack
+        emit-sbom molecule-full-stack audit-log audit-log-append
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -74,6 +74,8 @@ help:
 	@echo "  tspu-canary              Daily TSPU rule-drift probes (run from in-cohort box)"
 	@echo "  emit-sbom                Emit CycloneDX SBOM of pinned binaries → sbom/<label>.json"
 	@echo "  molecule-full-stack      Run site.yml end-to-end inside a Docker container"
+	@echo "  audit-log                Decrypt and print the credential-issuance audit log"
+	@echo "  audit-log-append ACTION=…  Append a record to the audit log (operator-driven)"
 	@echo "  verify TAG_ON_SUCCESS=1  Tag current commit as vpn-deploy-known-good-* after verify"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
@@ -267,6 +269,16 @@ tspu-canary:
 
 emit-sbom:
 	VPN_SECRETS_FILE=$(SECRETS_FILE) python3 ./scripts/emit-sbom.py
+
+audit-log:
+	./scripts/audit-log.sh read
+
+audit-log-append:
+	@test -n "$(ACTION)" || { echo "usage: make audit-log-append ACTION=… [CLIENT=…] [NOTE=…]"; exit 1; }
+	ENV=$(ENV) PROVIDER=$(PROVIDER) ./scripts/audit-log.sh append \
+	  --action $(ACTION) \
+	  $(if $(CLIENT),--client $(CLIENT)) \
+	  $(if $(NOTE),--note "$(NOTE)")
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
