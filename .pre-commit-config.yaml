@@ -70,3 +70,10 @@ repos:
         language: system
         pass_filenames: false
         files: ^(ansible/.*\.j2|ansible/group_vars/.*\.yml|ansible/roles/.*/defaults/main\.yml|secrets/prod\.secrets\.example\.yaml|tests/snapshot/golden/.*)$
+
+      - id: validate-secrets-schema
+        name: validate-secrets (example schema conforms to secrets/schema.json)
+        entry: python3 scripts/validate-secrets.py
+        language: system
+        pass_filenames: false
+        files: ^secrets/(prod\.secrets\.example\.yaml|schema\.json)$

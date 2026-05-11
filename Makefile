@@ -22,7 +22,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         emit-sbom molecule-full-stack audit-log audit-log-append \
         setup-yubikey check-killswitch install-operator-crons \
         remove-operator-crons issue-sub-token sub-reads \
-        test-unit snapshot-check snapshot-update
+        test-unit snapshot-check snapshot-update validate-secrets
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -101,6 +101,7 @@ help:
 	@echo "  test-unit                  Run pytest unit tests (tests/unit/)"
 	@echo "  snapshot-check             Diff every Jinja render against tests/snapshot/golden/"
 	@echo "  snapshot-update            Refresh the goldens (run after intentional change)"
+	@echo "  validate-secrets           jsonschema check (strict if SECRETS_FILE is set)"
 	@echo "  molecule-test ROLE=<name>  Run one role's molecule scenario"
 	@echo "  molecule-full-stack        site.yml end-to-end inside a Docker container"
 
@@ -147,6 +148,7 @@ pre-deploy-check:
 	@if [ "$(SKIP_PRECHECK)" = "1" ]; then \
 	  echo "pre-deploy-check: skipped (SKIP_PRECHECK=1)"; \
 	else \
+	  python3 ./scripts/validate-secrets.py $(SECRETS_FILE) --strict && \
 	  VPN_SECRETS_FILE=$(SECRETS_FILE) python3 ./scripts/spot-check-secrets.py && \
 	  VPN_SECRETS_FILE=$(SECRETS_FILE) ./scripts/check-certs.sh; \
 	fi
@@ -217,6 +219,13 @@ snapshot-check:
 
 snapshot-update:
 	python3 scripts/render-snapshots.py --update
+
+validate-secrets:
+	@if [ -f "$(SECRETS_FILE)" ]; then \
+	  python3 scripts/validate-secrets.py $(SECRETS_FILE) --strict; \
+	else \
+	  python3 scripts/validate-secrets.py; \
+	fi
 
 molecule-test:
 	@test -n "$(ROLE)" || { echo "ROLE=<role-name> required (e.g. baseline, firewall, xray)"; exit 1; }
