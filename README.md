@@ -55,6 +55,8 @@ Switch via `make PROVIDER=upcloud …`.
     each with its own port/flow_mode/finalmask/clients.
 14. `docs/MULTI-OPERATOR.md` — per-scope SOPS rules, role-scoped secrets
     files, audit-log boundaries.
+15. `docs/SUBSCRIPTION-HOST-SEPARATION.md` — run the subscription
+    delivery role on a dedicated VPS via `vpn_subscription_only`.
 
 Operational runbooks: `docs/RUNBOOK-{rotate,rollback,incident,restore,add-fallback}.md`.
 

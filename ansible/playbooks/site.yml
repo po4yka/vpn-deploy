@@ -23,6 +23,11 @@
           VPN_SECRETS_FILE is not set. Run `make decrypt` or export the path
           to your decrypted secrets file before running this playbook.
 
+  # Hosts in the `vpn-subscription-only` inventory group skip every
+  # transport-class role and run only baseline + firewall + the
+  # subscription-host role + supporting services (monitoring /
+  # watchdog / backup). See docs/SUBSCRIPTION-HOST-SEPARATION.md.
+
   roles:
     - role: baseline
       tags: [baseline, always]
@@ -31,27 +36,27 @@
       tags: [firewall, always]
 
     - role: xray
-      when: vpn.enable_xray_reality | default(true)
+      when: (vpn.enable_xray_reality | default(true)) and not (vpn_subscription_only | default(false))
       tags: [xray, p0, transport]
 
     - role: geodata
-      when: (vpn.enable_xray_reality | default(true)) and (vpn.enable_geodata | default(true))
+      when: (vpn.enable_xray_reality | default(true)) and (vpn.enable_geodata | default(true)) and not (vpn_subscription_only | default(false))
       tags: [geodata, xray]
 
     - role: nginx-xhttp
-      when: vpn.enable_nginx_xhttp | default(true)
+      when: (vpn.enable_nginx_xhttp | default(true)) and not (vpn_subscription_only | default(false))
       tags: [nginx, xhttp, p1, transport]
 
     - role: naive
-      when: vpn.enable_naive | default(false)
+      when: (vpn.enable_naive | default(false)) and not (vpn_subscription_only | default(false))
       tags: [naive, p1, transport]
 
     - role: hysteria
-      when: vpn.enable_hysteria | default(false)
+      when: (vpn.enable_hysteria | default(false)) and not (vpn_subscription_only | default(false))
       tags: [hysteria, p2, transport]
 
     - role: amneziawg
-      when: vpn.enable_amneziawg | default(false)
+      when: (vpn.enable_amneziawg | default(false)) and not (vpn_subscription_only | default(false))
       tags: [amneziawg, awg, p2, transport]
 
     - role: monitoring
@@ -67,17 +72,17 @@
       tags: [backup]
 
     - role: subscription-host
-      when: vpn.enable_subscription_host | default(false)
+      when: (vpn.enable_subscription_host | default(false)) or (vpn_subscription_only | default(false))
       tags: [subscription]
 
     - role: warp-outbound
-      when: vpn.enable_warp_outbound | default(false)
+      when: (vpn.enable_warp_outbound | default(false)) and not (vpn_subscription_only | default(false))
       tags: [warp, outbound]
 
     - role: honeypot
-      when: vpn.enable_honeypot | default(false)
+      when: (vpn.enable_honeypot | default(false)) and not (vpn_subscription_only | default(false))
       tags: [honeypot, defensive]
 
     - role: probe-ratelimit
-      when: vpn.enable_probe_ratelimit | default(false)
+      when: (vpn.enable_probe_ratelimit | default(false)) and not (vpn_subscription_only | default(false))
       tags: [probe-ratelimit, defensive]
