@@ -14,7 +14,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         rollback-xray rollback-config rotate-credentials check-prereqs \
         destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
         molecule-test smoke-test validate-target scan-targets blue-green \
-        spot-check-secrets bootstrap-secrets probe-asn
+        spot-check-secrets bootstrap-secrets probe-asn emit-qr
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -54,6 +54,7 @@ help:
 	@echo "  bootstrap-secrets …  Generate full crypto + SOPS-encrypt for a fresh env"
 	@echo "  spot-check-secrets   Audit decrypted secrets for placeholders + cert health"
 	@echo "  probe-asn HOST=…     One-shot Team Cymru ASN lookup (IP or hostname)"
+	@echo "  emit-qr CLIENT=…     PNG QR for the client (TYPE=singbox|uri, OUT=path)"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
@@ -181,6 +182,12 @@ spot-check-secrets:
 probe-asn:
 	@test -n "$(HOST)" || { echo "usage: make probe-asn HOST=mirror.example.com"; exit 1; }
 	./scripts/probe-asn.sh $(HOST)
+
+emit-qr:
+	@test -n "$(CLIENT)" || { echo "usage: make emit-qr CLIENT=phone [TYPE=singbox|uri] [OUT=phone.png]"; exit 1; }
+	./scripts/emit-qr.sh $(CLIENT) \
+	  $(if $(TYPE),--type $(TYPE)) \
+	  $(if $(OUT),--out $(OUT))
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
