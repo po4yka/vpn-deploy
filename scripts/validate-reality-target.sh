@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Pre-deploy validator for the REALITY target host. Runs a 7-step check
+# Pre-deploy validator for the REALITY target host. Runs an 8-step check
 # (TLS 1.3 handshake, ALPN h2, certificate SAN coverage, plausible
 # public CA, real HTTP body, Chrome-uTLS compatibility, anti-template
-# heuristic) and exits non-zero on any hard failure.
+# heuristic, ASN plausibility) and exits non-zero on any hard failure.
 #
 # Usage:
 #   scripts/validate-reality-target.sh                # reads from secrets
-#   TARGET=www.cloudflare.com:443 SERVER_NAMES=www.cloudflare.com \
+#   TARGET=example.com:443 SERVER_NAMES=example.com \
 #     scripts/validate-reality-target.sh              # explicit override
 #
 # Required env (read from secrets if not set):
@@ -16,6 +16,7 @@
 # Optional:
 #   SOPS_FILE       path to encrypted secrets file
 #   ENV             default: prod
+#   VPS_ASN         ASN integer; if set, [8/8] flags ASN mismatch as a warning
 set -euo pipefail
 
 ENV="${ENV:-prod}"
@@ -50,7 +51,7 @@ warns=0
 # ---------------------------------------------------------------------------
 # 1. TLS handshake works at all (mandatory)
 # ---------------------------------------------------------------------------
-echo "[1/7] TLS 1.3 handshake to ${HOST}:${PORT}"
+echo "[1/8] TLS 1.3 handshake to ${HOST}:${PORT}"
 if ! openssl s_client -connect "${HOST}:${PORT}" -servername "${HOST}" \
        -tls1_3 -alpn h2,http/1.1 < /dev/null 2>/tmp/.target.log >/tmp/.target.out; then
   echo "  FAIL: TLS handshake failed"
@@ -66,7 +67,7 @@ ALPN="$(grep -E 'ALPN protocol' /tmp/.target.out | head -1 | awk -F': ' '{print 
 # ---------------------------------------------------------------------------
 # 2. ALPN includes h2 (mandatory — REALITY relies on H2)
 # ---------------------------------------------------------------------------
-echo "[2/7] H2 (ALPN h2) supported"
+echo "[2/8] H2 (ALPN h2) supported"
 if [[ "$ALPN" != "h2" ]]; then
   echo "  FAIL: ALPN is '${ALPN}', expected 'h2'"
   fails=$((fails+1))
@@ -75,7 +76,7 @@ fi
 # ---------------------------------------------------------------------------
 # 3. Certificate SAN covers every serverName (mandatory)
 # ---------------------------------------------------------------------------
-echo "[3/7] Certificate SAN covers every serverName"
+echo "[3/8] Certificate SAN covers every serverName"
 SAN="$(openssl s_client -connect "${HOST}:${PORT}" -servername "${HOST}" \
         -showcerts < /dev/null 2>/dev/null \
         | openssl x509 -noout -ext subjectAltName 2>/dev/null \
@@ -104,7 +105,7 @@ done
 # ---------------------------------------------------------------------------
 # 4. Common Name plausibility (warn) — discourage exotic / mismatched CNs
 # ---------------------------------------------------------------------------
-echo "[4/7] Subject / issuer plausibility"
+echo "[4/8] Subject / issuer plausibility"
 SUBJECT="$(openssl s_client -connect "${HOST}:${PORT}" -servername "${HOST}" \
             < /dev/null 2>/dev/null | openssl x509 -noout -subject 2>/dev/null || true)"
 ISSUER="$(openssl s_client -connect "${HOST}:${PORT}" -servername "${HOST}" \
@@ -121,7 +122,7 @@ fi
 # ---------------------------------------------------------------------------
 # 5. HTTP/2 200 on /  (mandatory — empty/redirect-loop targets fail probes)
 # ---------------------------------------------------------------------------
-echo "[5/7] HTTPS GET / returns a real response"
+echo "[5/8] HTTPS GET / returns a real response"
 HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
               --resolve "${HOST}:${PORT}:$(getent hosts "$HOST" | awk '{print $1}' | head -1)" \
               "https://${HOST}:${PORT}/" || echo 000)"
@@ -146,7 +147,7 @@ esac
 # ---------------------------------------------------------------------------
 # 6. uTLS Chrome fingerprint compatibility (warn)
 # ---------------------------------------------------------------------------
-echo "[6/7] uTLS Chrome compatibility (mimic ClientHello)"
+echo "[6/8] uTLS Chrome compatibility (mimic ClientHello)"
 if curl -fsS --max-time 10 \
      -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' \
      --tls-max 1.3 \
@@ -160,7 +161,7 @@ fi
 # ---------------------------------------------------------------------------
 # 7. Anti-template OPSEC heuristic (warn) — overused REALITY targets
 # ---------------------------------------------------------------------------
-echo "[7/7] Target popularity heuristic"
+echo "[7/8] Target popularity heuristic"
 overused="www.cloudflare.com www.microsoft.com www.apple.com www.google.com discord.com"
 for o in $overused; do
   if [[ "$HOST" == "$o" ]]; then
@@ -169,6 +170,48 @@ for o in $overused; do
     break
   fi
 done
+
+# ---------------------------------------------------------------------------
+# 8. ASN plausibility (warn) — target IP should live on an ASN that looks
+#    plausible alongside the VPS. Hyperscaler/global-brand SNI on a small
+#    VPS-hosting IP creates an ASN/SNI mismatch that TSPU's IP-reputation
+#    pipeline can score against. See reality-target-selection-2026.
+# ---------------------------------------------------------------------------
+echo "[8/8] Target ASN plausibility"
+target_ip="$(getent hosts "$HOST" | awk '{print $1}' | head -1)"
+if [[ -z "$target_ip" ]]; then
+  echo "  WARN: could not resolve $HOST to compare ASN"
+  warns=$((warns+1))
+else
+  # Cymru's whois server returns "AS | IP | BGP Prefix | CC | Registry | Allocated | AS Name"
+  asn_line="$(whois -h whois.cymru.com " -v $target_ip" 2>/dev/null | tail -1 || true)"
+  if [[ -z "$asn_line" ]] || echo "$asn_line" | grep -qiE '^bulk|^error|<html'; then
+    echo "  WARN: ASN lookup unavailable (Team Cymru whois) — skip"
+    warns=$((warns+1))
+  else
+    target_asn="$(echo "$asn_line" | awk -F'|' '{gsub(/^ +| +$/,"",$1); print $1}')"
+    target_org="$(echo "$asn_line" | awk -F'|' '{gsub(/^ +| +$/,"",$7); print $7}')"
+    echo "  target_ip=$target_ip  asn=AS${target_asn}  org=${target_org}"
+
+    # Flag the "Avoid" tier (docs/PROVIDER-NOTES.md) outright — these prefixes
+    # are bucketed as foreign-datacenter by TSPU and trigger TCP freeze.
+    case "$target_asn" in
+      13335|16276|24940|14061|26383|216071)
+        echo "  WARN: target ASN AS${target_asn} is in the Avoid tier (see docs/PROVIDER-NOTES.md)"
+        warns=$((warns+1)) ;;
+    esac
+
+    # If the operator exported VPS_ASN (e.g. from terraform output), compare.
+    if [[ -n "${VPS_ASN:-}" ]]; then
+      if [[ "$target_asn" == "$VPS_ASN" ]]; then
+        echo "  ok: target ASN matches VPS ASN"
+      else
+        echo "  WARN: VPS_ASN=$VPS_ASN does not match target AS${target_asn} (ASN/SNI mismatch heuristic)"
+        warns=$((warns+1))
+      fi
+    fi
+  fi
+fi
 
 echo
 echo "summary: ${fails} hard failure(s), ${warns} warning(s)"
