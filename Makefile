@@ -21,7 +21,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         watch-spare promote-spare probing-summary tspu-canary \
         emit-sbom molecule-full-stack audit-log audit-log-append \
         setup-yubikey check-killswitch install-operator-crons \
-        remove-operator-crons
+        remove-operator-crons issue-sub-token sub-reads
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -70,6 +70,8 @@ help:
 	@echo "  emit-singbox CLIENT=…      Full sing-box client JSON (multi-host + cohort aware)"
 	@echo "  emit-qr CLIENT=…           PNG QR for the client (TYPE=singbox|uri, OUT=path)"
 	@echo "  issue-bootstrap CLIENT=…   Issue a one-time /bootstrap/<token> URL"
+	@echo "  issue-sub-token CLIENT=…   Issue a long-lived /sub/<token> URL (EXPIRES=… QR=1)"
+	@echo "  sub-reads [SINCE=… ROUTE=… LIMIT=…]  Pull the server-side read-audit log"
 	@echo "  check-killswitch BUNDLE=…  Validate the kill-switch properties of a bundle"
 	@echo ""
 	@echo "── PRE-DEPLOY GUARDS ──────────────────────────────────────────────────"
@@ -260,6 +262,18 @@ check-ip-reputation:
 issue-bootstrap:
 	@test -n "$(CLIENT)" || { echo "usage: make issue-bootstrap CLIENT=phone"; exit 1; }
 	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/issue-bootstrap.sh $(CLIENT)
+
+issue-sub-token:
+	@test -n "$(CLIENT)" || { echo "usage: make issue-sub-token CLIENT=phone [EXPIRES=YYYY-MM-DD] [QR=1]"; exit 1; }
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/issue-sub-token.sh $(CLIENT) \
+	  $(if $(EXPIRES),--expires $(EXPIRES)) \
+	  $(if $(filter 1 yes true,$(QR)),--qr)
+
+sub-reads:
+	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/sub-reads.sh \
+	  $(if $(SINCE),--since $(SINCE)) \
+	  $(if $(ROUTE),--route $(ROUTE)) \
+	  $(if $(LIMIT),--limit $(LIMIT))
 
 test-tls-policing:
 	@test -n "$(HOST)" || { echo "usage: make test-tls-policing HOST=vpn.example.com [STEPS=1,4,8,12,16,24]"; exit 1; }

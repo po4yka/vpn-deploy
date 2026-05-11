@@ -34,32 +34,33 @@ so it must be issued, scoped, expirable, and revocable.
 | HTTPS endpoint with no access log of paths | required | `access_log off` on `/sub/` and `/bootstrap/` | ✓ shipped |
 | Revocation list | implemented in v1.2 | `subscription.revoked_tokens` | ✓ shipped |
 | Rate-limit | implemented in v1.2 | `subscription.rate_limit` + burst | ✓ shipped |
-| Token expiry per device | required | `<token>.meta` sidecar; vpn-bootstrap returns 410 after `expires` | ✓ shipped (bootstrap only — see notes) |
-| Delivery host separate from VPN node | required | colocated with VPN (subscription-host role) | gap — single VPS in v1 |
-| QR bootstrap flow | required | `issue-bootstrap.sh --qr` writes a PNG | ✓ shipped |
-| Audit log of token reads | recommended | partial — nginx access log only | gap |
+| Token expiry per device | required | `<token>.meta` sidecar (ISO date or epoch); vpn-bootstrap returns 410 after `expires`. Works for BOTH /sub/ and /bootstrap/. | ✓ shipped |
+| Delivery host separate from VPN node | required | `vpn_subscription_only` inventory var skips every transport role; pairs with multi-operator SOPS split | ✓ shipped (see `docs/SUBSCRIPTION-HOST-SEPARATION.md`) |
+| QR bootstrap flow | required | `issue-bootstrap.sh --qr` + `issue-sub-token.sh --qr` writes a PNG | ✓ shipped |
+| Audit log of token reads | recommended | `/var/log/vpn-subscription/reads.log` JSONL; one record per read (consumed/unknown/revoked/expired) with hash prefix + src_ip + bytes; pull via `make sub-reads` | ✓ shipped |
+| Hashed token storage | recommended | disk paths use `<route>/<sha256(token)>`; plaintext token never on disk | ✓ shipped |
 | No `Referer` / no `cache` | required | explicit `Cache-Control: no-store` + `Referrer-Policy: no-referrer` on both `/sub/` and `/bootstrap/` | ✓ shipped |
 
 ## What to ship next
 
-The five "ship next" items from earlier iterations are now landed.
-Remaining gaps in priority order:
+The eight items previously on the "ship next" list are now landed —
+the gap matrix above is at parity with the wiki spec. Remaining work
+is operational rather than architectural:
 
-1. **Per-token expiry on `/sub/`** — today's expiry only covers
-   `/bootstrap/` (the Python service that owns its own check). The
-   static-payload `/sub/` location has no expiry mechanism; needs
-   either nginx Lua or moving `/sub/` behind the same Python service.
-2. **Audit log of token reads** — capture which token was consumed
-   when, into an append-only structured log separate from nginx.
-   Useful for forensics after a credential leak.
-3. **Hashed token storage** — payloads under `/var/lib/vpn-sub/<token>`
-   are currently keyed by plaintext token. A hash-keyed layout
-   (`/var/lib/vpn-sub/<sha256(token)>`) would mean disk theft alone
-   doesn't yield usable subscription URLs.
-4. **Delivery host separate from VPN node** — requires a separate
-   provider/VPS and falls out of the v1 single-VPS architecture. See
-   `docs/RUNBOOK-add-fallback.md` and `multi-provider-vpn-fleet-2026`
-   for the multi-host shape.
+1. **Periodic rotation of `/sub/` tokens** — even with expiry,
+   long-lived /sub/ URLs accumulate trust over time. A scheduled
+   re-issue cadence (e.g. quarterly) trims the leak window. Not
+   currently automated; `make issue-sub-token CLIENT=… --refresh-
+   token <existing-token>` does the manual operation.
+2. **`make sub-reads` aggregation** — the read-audit log is JSONL
+   and grep-friendly today; a small summary script (top-pulling
+   tokens, geographic clustering of src_ip, rate spikes) would help
+   forensics. Compose from `jq` + existing tooling for v1.
+3. **Multi-region delivery host** — `vpn_subscription_only` covers
+   the single-host separation case. A multi-region delivery fleet
+   (different ASN, geo-distributed) is the next step; the existing
+   `fleet-rotate` orchestrator can drive it once the inventory
+   pattern is documented.
 
 ## What is NOT a gap
 

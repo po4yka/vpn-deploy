@@ -40,6 +40,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROVIDER="${PROVIDER:-upcloud}"
 ENV="${ENV:-prod}"
 TF_DIR="${REPO_ROOT}/terraform/providers/${PROVIDER}"
+SUBSCRIPTION_DIR="${SUBSCRIPTION_DIR:-/var/lib/vpn-subscription}"
 
 server_ip="$(terraform -chdir="$TF_DIR" output -raw server_ipv4)"
 admin_user="$(terraform -chdir="$TF_DIR" output -raw admin_user 2>/dev/null || echo admin)"
@@ -51,7 +52,15 @@ token="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=' | head -c 43)"
 payload="$("${REPO_ROOT}/scripts/emit-singbox.sh" "$CLIENT")"
 [[ -n "$payload" ]] || { echo "empty payload from emit-singbox.sh" >&2; exit 1; }
 
-remote_path="/var/lib/vpn-bootstrap/${token}"
+# Server stores under sha256(token) so the plaintext token never touches
+# disk. The hash is computed identically by the Python service on every
+# inbound request — see ansible/roles/subscription-host/templates/
+# vpn-bootstrap.py.j2.
+token_hash="$(printf '%s' "$token" | shasum -a 256 2>/dev/null | awk '{print $1}')"
+if [[ -z "$token_hash" ]]; then
+  token_hash="$(printf '%s' "$token" | sha256sum | awk '{print $1}')"
+fi
+remote_path="${SUBSCRIPTION_DIR}/bootstrap/${token_hash}"
 
 # Read subscription port + bootstrap toggles from group_vars/defaults — we
 # could parse the host config, but the defaults are stable and the test
@@ -74,6 +83,8 @@ if [[ -n "$EXPIRES" ]]; then
   printf '%s' "$meta" | ssh "${admin_user}@${server_ip}" \
     "sudo install -o vpn-bootstrap -g vpn-bootstrap -m 0600 /dev/stdin '${remote_path}.meta'"
 fi
+
+echo "stored hash: ${token_hash:0:8}…  path: ${remote_path}"
 
 url="https://${sub_host}:${sub_port}/bootstrap/${token}"
 
