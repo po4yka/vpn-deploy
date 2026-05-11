@@ -22,7 +22,8 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         emit-sbom molecule-full-stack audit-log audit-log-append \
         setup-yubikey check-killswitch install-operator-crons \
         remove-operator-crons issue-sub-token sub-reads \
-        test-unit snapshot-check snapshot-update validate-secrets
+        test-unit snapshot-check snapshot-update validate-secrets \
+        tf-test
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -102,6 +103,7 @@ help:
 	@echo "  snapshot-check             Diff every Jinja render against tests/snapshot/golden/"
 	@echo "  snapshot-update            Refresh the goldens (run after intentional change)"
 	@echo "  validate-secrets           jsonschema check (strict if SECRETS_FILE is set)"
+	@echo "  tf-test                    terraform test (mock_provider; needs TF 1.6+)"
 	@echo "  molecule-test ROLE=<name>  Run one role's molecule scenario"
 	@echo "  molecule-full-stack        site.yml end-to-end inside a Docker container"
 
@@ -226,6 +228,9 @@ validate-secrets:
 	else \
 	  python3 scripts/validate-secrets.py; \
 	fi
+
+tf-test:
+	@cd $(TF_ROOT) && terraform init -backend=false >/dev/null && terraform test
 
 molecule-test:
 	@test -n "$(ROLE)" || { echo "ROLE=<role-name> required (e.g. baseline, firewall, xray)"; exit 1; }
