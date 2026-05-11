@@ -16,7 +16,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         molecule-test smoke-test validate-target scan-targets blue-green \
         spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
         audit-permissions asn-drift check-ip-reputation issue-bootstrap \
-        test-tls-policing fleet-status
+        test-tls-policing fleet-status drift-since-tag
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -64,6 +64,8 @@ help:
 	@echo "  issue-bootstrap CLIENT=…  Issue a one-time /bootstrap/<token> URL"
 	@echo "  test-tls-policing HOST=… Probe the ~12-concurrent-TLS home-ISP rule"
 	@echo "  fleet-status [HOSTS=…]   Summary table across every host:env pair"
+	@echo "  drift-since-tag          Diff fleet against last vpn-deploy-known-good-* tag"
+	@echo "  verify TAG_ON_SUCCESS=1  Tag current commit as vpn-deploy-known-good-* after verify"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
@@ -117,6 +119,10 @@ deploy:
 verify:
 	VPN_SECRETS_FILE=$(SECRETS_FILE) \
 	ansible-playbook $(ANSIBLE_DIR)/playbooks/verify.yml
+	@if [ "$(TAG_ON_SUCCESS)" = "1" ]; then \
+	  tag="vpn-deploy-known-good-$$(date +%Y-%m-%d-%H%M)"; \
+	  git tag "$$tag" && echo "tagged: $$tag"; \
+	fi
 
 clean:
 	@if [ -f "$(SECRETS_FILE)" ]; then \
@@ -223,6 +229,10 @@ test-tls-policing:
 
 fleet-status:
 	./scripts/fleet-status.sh
+
+drift-since-tag:
+	PROVIDER=$(PROVIDER) ENV=$(ENV) VPN_SECRETS_FILE=$(SECRETS_FILE) \
+	  ./scripts/drift-since-tag.sh
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
