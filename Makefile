@@ -15,7 +15,8 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         destroy backup-state burn-check diff-secrets emit-singbox install-hooks \
         molecule-test smoke-test validate-target scan-targets blue-green \
         spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
-        audit-permissions asn-drift check-ip-reputation issue-bootstrap
+        audit-permissions asn-drift check-ip-reputation issue-bootstrap \
+        test-tls-policing
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -61,6 +62,7 @@ help:
 	@echo "  asn-drift            Detect ASN drift on the deployed VPS IP, alert via ntfy"
 	@echo "  check-ip-reputation  Spamhaus / FireHOL / AbuseIPDB (key opt) check; alert via ntfy"
 	@echo "  issue-bootstrap CLIENT=…  Issue a one-time /bootstrap/<token> URL"
+	@echo "  test-tls-policing HOST=… Probe the ~12-concurrent-TLS home-ISP rule"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
@@ -211,6 +213,12 @@ check-ip-reputation:
 issue-bootstrap:
 	@test -n "$(CLIENT)" || { echo "usage: make issue-bootstrap CLIENT=phone"; exit 1; }
 	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/issue-bootstrap.sh $(CLIENT)
+
+test-tls-policing:
+	@test -n "$(HOST)" || { echo "usage: make test-tls-policing HOST=vpn.example.com [STEPS=1,4,8,12,16,24]"; exit 1; }
+	./scripts/test-tls-policing.sh --host $(HOST) \
+	  $(if $(PORT),--port $(PORT)) \
+	  $(if $(STEPS),--steps $(STEPS))
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
