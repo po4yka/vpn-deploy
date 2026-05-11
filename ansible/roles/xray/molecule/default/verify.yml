@@ -37,3 +37,23 @@
         path: /opt/xray/current
       register: link
       failed_when: not link.stat.islnk or 'v26.3.27' not in link.stat.lnk_target
+
+    # State-level: the stubbed xray binary sleeps in `run` mode, so the
+    # unit should reach `active (running)`. If the role's restart handler
+    # ever silently swallows a start failure, this catches it.
+    - name: xray.service is active
+      ansible.builtin.command:
+        cmd: systemctl is-active xray.service
+      register: xray_active
+      changed_when: false
+      failed_when: xray_active.stdout != "active"
+
+    - name: xray.service journal has no fatal entries
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ! journalctl -u xray.service --since "5 minutes ago" \
+            --no-pager --output=cat \
+            | grep -iE 'traceback|fatal|panic|failed to'
+        executable: /bin/bash
+      changed_when: false

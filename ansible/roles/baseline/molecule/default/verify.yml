@@ -36,3 +36,22 @@
       register: ts
       changed_when: false
       failed_when: ts.stdout != "enabled"
+
+    # State-level: prove sshd is alive and the hardening drop-in took
+    # effect (PasswordAuthentication=no must appear in the effective
+    # config rendered by sshd -T).
+    - name: sshd.service is active
+      ansible.builtin.command:
+        cmd: systemctl is-active ssh.service
+      register: sshd_active
+      changed_when: false
+      failed_when: sshd_active.stdout != "active"
+
+    - name: sshd -T applies the hardening drop-in
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          sshd -T 2>/dev/null | awk '$1=="passwordauthentication"{print $2}' \
+            | grep -q '^no$'
+        executable: /bin/bash
+      changed_when: false

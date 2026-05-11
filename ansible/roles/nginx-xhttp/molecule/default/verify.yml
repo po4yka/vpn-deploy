@@ -50,3 +50,19 @@
           ! grep -q 'CF-Connecting-IP\|real_ip_header' /etc/nginx/sites-available/vpn-xhttp.conf
         executable: /bin/bash
       changed_when: false
+
+    # State-level
+    - name: nginx.service is active
+      ansible.builtin.command:
+        cmd: systemctl is-active nginx.service
+      register: nginx_active
+      changed_when: false
+      failed_when: nginx_active.stdout != "active"
+
+    - name: nginx binds the configured public XHTTP port
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ss -lntp '( sport = :8443 )' | grep -q ':8443'
+        executable: /bin/bash
+      changed_when: false

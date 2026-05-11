@@ -38,3 +38,23 @@
           ! grep -q 'type: salamander' /etc/hysteria/config.yaml
         executable: /bin/bash
       changed_when: false
+
+    # State-level: hysteria binary is stubbed in molecule, so the unit
+    # may be `activating` rather than `active` depending on the stub;
+    # still catch a hard `failed` state.
+    - name: hysteria-server.service is not in failed state
+      ansible.builtin.command:
+        cmd: systemctl is-failed hysteria-server.service
+      register: hys_failed
+      changed_when: false
+      failed_when: hys_failed.stdout == "failed"
+
+    - name: hysteria-server journal has no panic / traceback
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ! journalctl -u hysteria-server.service --since "5 minutes ago" \
+            --no-pager --output=cat \
+            | grep -iE 'panic|traceback|fatal'
+        executable: /bin/bash
+      changed_when: false

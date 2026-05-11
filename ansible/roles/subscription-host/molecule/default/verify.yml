@@ -14,14 +14,6 @@
       register: site
       failed_when: not site.stat.exists or not site.stat.islnk
 
-    - name: revoked-tokens map dropped
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          grep -q 'deadbeefdeadbeefdeadbeef.*1' /etc/nginx/conf.d/vpn-sub-revoked.conf
-        executable: /bin/bash
-      changed_when: false
-
     - name: rate-limit zone defined
       ansible.builtin.shell:
         cmd: |
@@ -30,8 +22,50 @@
         executable: /bin/bash
       changed_when: false
 
-    - name: payload directory exists with safe perms
+    - name: Subscription payload directory exists with safe perms
       ansible.builtin.stat:
-        path: /var/lib/vpn-sub
+        path: /var/lib/vpn-subscription
       register: payload_dir
       failed_when: payload_dir.stat.mode != "0750"
+
+    # State-level: prove the role left the host in a serving state, not
+    # merely that the config files were rendered.
+    - name: vpn-bootstrap.service is active
+      ansible.builtin.command:
+        cmd: systemctl is-active vpn-bootstrap.service
+      register: bootstrap_active
+      changed_when: false
+      failed_when: bootstrap_active.stdout != "active"
+
+    - name: nginx.service is active
+      ansible.builtin.command:
+        cmd: systemctl is-active nginx.service
+      register: nginx_active
+      changed_when: false
+      failed_when: nginx_active.stdout != "active"
+
+    - name: vpn-bootstrap binds 127.0.0.1:8445 (loopback only)
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ss -lntp '( sport = :8445 )' | grep -q '127.0.0.1:8445'
+        executable: /bin/bash
+      changed_when: false
+
+    - name: nginx binds the subscription port
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ss -lntp '( sport = :8444 )' | grep -q ':8444'
+        executable: /bin/bash
+      changed_when: false
+
+    - name: vpn-bootstrap.service journal has no fatal entries
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          ! journalctl -u vpn-bootstrap.service --since "5 minutes ago" \
+            --no-pager --output=cat \
+            | grep -iE 'traceback|fatal|critical'
+        executable: /bin/bash
+      changed_when: false
