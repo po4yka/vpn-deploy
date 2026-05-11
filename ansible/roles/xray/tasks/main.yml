@@ -49,30 +49,105 @@
     path: "{{ xray_install_dir }}/releases/{{ xray.version }}/xray"
   register: xray_release_binary
 
-- name: Download pinned Xray release
-  ansible.builtin.get_url:
-    url: "https://github.com/XTLS/Xray-core/releases/download/{{ xray.version }}/Xray-linux-{{ xray_arch }}.zip"
-    dest: "/tmp/xray-{{ xray.version }}-linux-{{ xray_arch }}.zip"
-    checksum: "sha256:{{ xray_sha256 }}"
-    mode: "0644"
-  when: not xray_release_binary.stat.exists
+# -----------------------------------------------------------------------------
+# Acquire the xray binary either via prebuilt release asset (default) or by
+# building from the pinned upstream tag (vpn.build_xray_from_source = true).
+# Both paths land the binary at {{ xray_install_dir }}/releases/{{ xray.version }}/xray.
+# -----------------------------------------------------------------------------
 
-- name: Create release directory
+- name: From-source build — install Go toolchain
+  ansible.builtin.apt:
+    name:
+      - golang-go
+      - git
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when:
+    - vpn.build_xray_from_source | default(false)
+    - not xray_release_binary.stat.exists
+
+- name: From-source build — release directory exists
   ansible.builtin.file:
     path: "{{ xray_install_dir }}/releases/{{ xray.version }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
-  when: not xray_release_binary.stat.exists
+  when:
+    - vpn.build_xray_from_source | default(false)
+    - not xray_release_binary.stat.exists
 
-- name: Unpack Xray release
+- name: From-source build — clone Xray-core at pinned tag
+  ansible.builtin.git:
+    repo: https://github.com/XTLS/Xray-core
+    dest: /opt/src/xray-core
+    version: "{{ xray.version }}"
+    depth: 1
+    update: false
+  when:
+    - vpn.build_xray_from_source | default(false)
+    - not xray_release_binary.stat.exists
+
+- name: From-source build — go build
+  ansible.builtin.command:
+    cmd: go build -trimpath -ldflags="-s -w" -o "{{ xray_install_dir }}/releases/{{ xray.version }}/xray" ./main
+    chdir: /opt/src/xray-core
+    creates: "{{ xray_install_dir }}/releases/{{ xray.version }}/xray"
+  environment:
+    CGO_ENABLED: "0"
+    GOFLAGS: "-trimpath"
+  when:
+    - vpn.build_xray_from_source | default(false)
+    - not xray_release_binary.stat.exists
+
+- name: From-source build — sha256 sanity (when pin is real)
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      got=$(sha256sum {{ xray_install_dir }}/releases/{{ xray.version }}/xray | awk '{print $1}')
+      want={{ xray_sha256 | quote }}
+      if [ "$want" != "REPLACE_WITH_RELEASE_SHA256" ] && [ -n "$want" ]; then
+        if [ "$got" != "$want" ]; then
+          echo "from-source build sha256 mismatch: got=$got want=$want" >&2
+          exit 1
+        fi
+      fi
+  changed_when: false
+  when:
+    - vpn.build_xray_from_source | default(false)
+    - not xray_release_binary.stat.exists
+
+- name: Release-asset path — download pinned Xray release
+  ansible.builtin.get_url:
+    url: "https://github.com/XTLS/Xray-core/releases/download/{{ xray.version }}/Xray-linux-{{ xray_arch }}.zip"
+    dest: "/tmp/xray-{{ xray.version }}-linux-{{ xray_arch }}.zip"
+    checksum: "sha256:{{ xray_sha256 }}"
+    mode: "0644"
+  when:
+    - not vpn.build_xray_from_source | default(false)
+    - not xray_release_binary.stat.exists
+
+- name: Release-asset path — release directory
+  ansible.builtin.file:
+    path: "{{ xray_install_dir }}/releases/{{ xray.version }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - not vpn.build_xray_from_source | default(false)
+    - not xray_release_binary.stat.exists
+
+- name: Release-asset path — unpack
   ansible.builtin.unarchive:
     src: "/tmp/xray-{{ xray.version }}-linux-{{ xray_arch }}.zip"
     dest: "{{ xray_install_dir }}/releases/{{ xray.version }}"
     remote_src: true
     creates: "{{ xray_install_dir }}/releases/{{ xray.version }}/xray"
-  when: not xray_release_binary.stat.exists
+  when:
+    - not vpn.build_xray_from_source | default(false)
+    - not xray_release_binary.stat.exists
 
 - name: Ensure xray binary executable
   ansible.builtin.file:

@@ -73,6 +73,29 @@ crossing.
    single-flag rollback (`make rollback-xray
    ROLLBACK_XRAY_VERSION=vX.Y.Z`).
 
+## Build-from-source path
+
+Set `vpn.build_xray_from_source: true` in group_vars to switch the
+xray role from "download a prebuilt release asset" to "git clone the
+pinned tag and run `go build` on the VPS".
+
+Trade-offs:
+
+  * slower first deploy (~2-5 minutes for `go build`)
+  * requires Go on the VPS (`apt install golang-go`, installed by the
+    role)
+  * the schema's `xray.linux_*_sha256` becomes an integrity check
+    on the produced binary, not just a verification of the upstream
+    release asset — a bytewise-reproducible upstream change is
+    caught at restart time when the pin is real (placeholder skips)
+  * closes the "release tag silently re-cut with different bytes"
+    risk, because the build inputs are the git tag + the Go toolchain
+    version, both of which are independently pinned
+
+When to flip it on: cohorts where supply-chain attestation is part of
+the threat model (high-risk operators, audited deployments). Default
+stays off; the prebuilt path is the v1 baseline.
+
 ## Revisit cadence
 
 Re-read this page on every Xray-core minor bump and at the start of
