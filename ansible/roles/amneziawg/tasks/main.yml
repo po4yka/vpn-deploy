@@ -80,18 +80,30 @@
     group: root
     mode: "0700"
 
-- name: Render AmneziaWG interface config
-  ansible.builtin.template:
-    src: awg0.conf.j2
-    dest: "{{ amneziawg_config_dir }}/{{ amneziawg.interface }}.conf"
-    owner: root
-    group: root
-    mode: "0600"
-  no_log: true
-  diff: false
-  notify: Reload amneziawg
+- name: Compute effective AmneziaWG instances
+  ansible.builtin.set_fact:
+    _awg_instances: >-
+      {{ (amneziawg_secrets.instances | default([])) if
+         (amneziawg_secrets.instances | default([])) | length > 0
+         else [{
+           'name': amneziawg.interface,
+           'listen_port': amneziawg.listen_port,
+           'address_v4': amneziawg.address_v4,
+           'address_v6': amneziawg.address_v6,
+           'server_private_key': amneziawg_secrets.server_private_key,
+           'jc':   amneziawg_secrets.jc   | default(4),
+           'jmin': amneziawg_secrets.jmin | default(40),
+           'jmax': amneziawg_secrets.jmax | default(70),
+           's1':   amneziawg_secrets.s1   | default(50),
+           's2':   amneziawg_secrets.s2   | default(100),
+           'h1':   amneziawg_secrets.h1,
+           'h2':   amneziawg_secrets.h2,
+           'h3':   amneziawg_secrets.h3,
+           'h4':   amneziawg_secrets.h4,
+           'peers': amneziawg_secrets.peers,
+         }] }}
 
-- name: Install awg-quick systemd unit
+- name: Install awg-quick systemd unit (shared across instances)
   ansible.builtin.template:
     src: awg-quick@.service.j2
     dest: /etc/systemd/system/awg-quick@.service
@@ -100,9 +112,28 @@
     mode: "0644"
   notify: Reload systemd
 
-- name: Enable and start awg-quick@<iface>
+- name: Render AmneziaWG interface configs
+  ansible.builtin.template:
+    src: awg0.conf.j2
+    dest: "{{ amneziawg_config_dir }}/{{ item.name }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  diff: false
+  loop: "{{ _awg_instances }}"
+  loop_control:
+    label: "{{ item.name }}"
+  vars:
+    _inst: "{{ item }}"
+  notify: Reload amneziawg
+
+- name: Enable and start awg-quick@<iface> for every instance
   ansible.builtin.systemd_service:
-    name: "awg-quick@{{ amneziawg.interface }}"
+    name: "awg-quick@{{ item.name }}"
     enabled: true
     state: started
     daemon_reload: true
+  loop: "{{ _awg_instances }}"
+  loop_control:
+    label: "{{ item.name }}"

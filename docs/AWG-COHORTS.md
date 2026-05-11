@@ -54,6 +54,10 @@ done
   you rotate H values on the server, push the new client config (the
   `new-client.sh` flow handles this when `amneziawg_secrets.h*` is
   bumped).
-- A single host with multiple cohorts requires multiple AWG instances
-  (different ports + different H values). The v1 layout assumes a
-  single cohort per host; multi-cohort is on the road map.
+- A single host can run several AmneziaWG instances at once — one
+  `awg-quick@<name>.service` per entry under
+  `amneziawg_secrets.instances`. Each instance has its own listen
+  port + address pool + Jc/H1..H4 set, so you can serve the RTK-South
+  profile and a MTS-mobile profile from the same VPS without
+  cross-contaminating fingerprints. Empty / missing `instances`
+  keeps the legacy single-instance behaviour.

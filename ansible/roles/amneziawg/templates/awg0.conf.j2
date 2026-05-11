@@ -1,24 +1,35 @@
+{# The template is shared between the legacy single-instance path
+   (rendered with `_inst = amneziawg_secrets`, top-level fields) and
+   the multi-instance loop in tasks/main.yml (rendered with
+   `_inst = <one entry of amneziawg_secrets.instances>`). Both shapes
+   carry the same field names — server_private_key, jc/jmin/jmax,
+   s1/s2, h1..h4, peers. Multi-instance entries add `listen_port`,
+   `address_v4`, `address_v6`. #}
+{%- set _inst = _inst | default(amneziawg_secrets) %}
+{%- set _listen_port = _inst.listen_port | default(amneziawg.listen_port) %}
+{%- set _addr_v4 = _inst.address_v4 | default(amneziawg.address_v4) %}
+{%- set _addr_v6 = _inst.address_v6 | default(amneziawg.address_v6) %}
 [Interface]
-PrivateKey = {{ amneziawg_secrets.server_private_key }}
-Address    = {{ amneziawg.address_v4 }}, {{ amneziawg.address_v6 }}
-ListenPort = {{ amneziawg.listen_port }}
+PrivateKey = {{ _inst.server_private_key }}
+Address    = {{ _addr_v4 }}, {{ _addr_v6 }}
+ListenPort = {{ _listen_port }}
 
 # AmneziaWG obfuscation parameters (mandatory; not standard WireGuard).
-Jc = {{ amneziawg_secrets.jc | default(4) }}
-Jmin = {{ amneziawg_secrets.jmin | default(40) }}
-Jmax = {{ amneziawg_secrets.jmax | default(70) }}
-S1 = {{ amneziawg_secrets.s1 | default(50) }}
-S2 = {{ amneziawg_secrets.s2 | default(100) }}
-H1 = {{ amneziawg_secrets.h1 }}
-H2 = {{ amneziawg_secrets.h2 }}
-H3 = {{ amneziawg_secrets.h3 }}
-H4 = {{ amneziawg_secrets.h4 }}
+Jc = {{ _inst.jc | default(4) }}
+Jmin = {{ _inst.jmin | default(40) }}
+Jmax = {{ _inst.jmax | default(70) }}
+S1 = {{ _inst.s1 | default(50) }}
+S2 = {{ _inst.s2 | default(100) }}
+H1 = {{ _inst.h1 }}
+H2 = {{ _inst.h2 }}
+H3 = {{ _inst.h3 }}
+H4 = {{ _inst.h4 }}
 
 # Outbound NAT for connected clients.
 PostUp   = nft add rule inet nat postrouting iifname "%i" oifname != "%i" masquerade
 PostDown = nft delete rule inet nat postrouting iifname "%i" oifname != "%i" masquerade
 
-{% for peer in amneziawg_secrets.peers %}
+{% for peer in _inst.peers %}
 [Peer]
 # {{ peer.name }}
 PublicKey  = {{ peer.public_key }}

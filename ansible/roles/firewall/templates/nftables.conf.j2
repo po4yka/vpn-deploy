@@ -70,8 +70,16 @@ table inet filter {
 {% endif %}
 
 {% if vpn.enable_amneziawg | default(false) %}
+{% set _awg_inst = (amneziawg_secrets.instances | default([])) if amneziawg_secrets is defined else [] %}
+{% if _awg_inst | length > 0 %}
+    # P2 — AmneziaWG ({{ _awg_inst | length }} instances)
+{% for inst in _awg_inst %}
+    udp dport {{ inst.listen_port }} accept  # awg instance: {{ inst.name }}
+{% endfor %}
+{% else %}
     # P2 — AmneziaWG (default UDP/51820; override via group_vars if needed)
     udp dport {{ amneziawg.listen_port | default(51820) }} accept
+{% endif %}
 {% endif %}
 
 {% if vpn.enable_honeypot | default(false) %}
