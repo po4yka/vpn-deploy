@@ -14,6 +14,12 @@ vpn:
   enable_watchdog: true           # local probe + ntfy/Pushover alerts
   enable_backup: true
   enable_subscription_host: false # opt-in; not in v1 default deploy
+  enable_warp_outbound: false     # opt-in; installs Cloudflare WARP CLI
+                                  # in SOCKS5 proxy mode on 127.0.0.1.
+                                  # See roles/warp-outbound for the
+                                  # split-hop egress rationale (breaks
+                                  # the dual-role single-IP flow that
+                                  # FOCI 2026 detects).
 
   # P0 flow mode — switches the VLESS+REALITY inbound between two shapes:
   #   vision (default) — `xtls-rprx-vision` flow, no mux. Best on

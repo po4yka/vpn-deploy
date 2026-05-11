@@ -69,3 +69,7 @@
     - role: subscription-host
       when: vpn.enable_subscription_host | default(false)
       tags: [subscription]
+
+    - role: warp-outbound
+      when: vpn.enable_warp_outbound | default(false)
+      tags: [warp, outbound]
