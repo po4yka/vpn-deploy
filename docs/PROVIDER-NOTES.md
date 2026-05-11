@@ -1,5 +1,24 @@
 # Provider notes
 
+## ASN / hoster risk tiers (RU threat model, 2026-05)
+
+Source: `censorship-bypass/wikis/infrastructure-operations/wiki/concepts/server-anti-detection-checklist-2026`
+and the TCP-freeze observation in `tspu-dpi-internals/wiki/concepts/tcp-connection-freezing`.
+
+| Tier | Provider / ASN | Notes |
+|---|---|---|
+| Avoid | Cloudflare AS13335 | TSPU peering at DME/KJA/LED; 8–16 KB cut; see `CDN-DECISION.md` |
+| Avoid | OVH AS16276, Hetzner AS24940, DigitalOcean AS14061 | "Foreign datacenter" ASN bucket triggers TCP freeze (~14–25 KB on mobile RU) |
+| Avoid | JustHost AS26383, VDSina AS216071 | Frequently flagged as VPN-tenant ranges; high churn |
+| Acceptable | UpCloud (current primary) | Not on the public RKN/TSPU watch lists as of 2026-05; verify ASN before rollout |
+| Preferred | Hostkey, nuxt.cloud (DE/NL), hostvds.com (FI) | Smaller, less-flagged ranges per community testing |
+
+For a full deploy this primarily affects the **egress** IP, not the
+ingress: a node that ingresses on REALITY/TCP and egresses through the
+same VPS IP will hit the TCP-freeze rule when the upstream is on one of
+the "Avoid" ASNs. Split-hop egress (separate exit IP, e.g. via WARP) is
+documented in `docs/ARCHITECTURE.md` once that role lands.
+
 ## UpCloud (primary, v1)
 
 UpCloud is the primary provider in v1. Resource shape:
@@ -61,8 +80,9 @@ Will use:
 
 - `hcloud_server`, `hcloud_ssh_key`, `hcloud_firewall`,
   `hcloud_firewall_attachment`.
-- ASN AS24940 — known-clean prefix history; expect to rotate IPs more
-  often than UpCloud, since Hetzner's ranges are more frequently abused.
+- ASN AS24940 — flagged in the TCP-freeze rule on RU mobile networks
+  (see the "Avoid" tier above). Hetzner remains useful for non-RU-mobile
+  cohorts and for development; rotate IPs more aggressively than UpCloud.
 - Cheaper than UpCloud per spec; smaller geographic surface (EU-heavy +
   US East/West, no APAC).
 - IPv6 must be explicitly enabled in `tfvars`; off by default on cheaper
