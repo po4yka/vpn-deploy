@@ -1,9 +1,8 @@
 ---
-# Subscription delivery: separate nginx server block, payload files at
-# /var/lib/vpn-sub/<token>, plus
-#   * revocation list — revoked tokens get HTTP 410 Gone instead of the file
-#   * per-IP rate limiting (nginx limit_req)
-#   * no access logs on the subscription host (privacy)
+# Subscription delivery host. nginx fronts TLS + rate-limit; the local
+# vpn-bootstrap Python service handles both /sub/<token> (long-lived)
+# and /bootstrap/<token> (single-use), with hashed-on-disk storage,
+# per-token expiry, revocation, and an audit log of every read.
 
 - name: Ensure nginx is present
   ansible.builtin.apt:
@@ -11,29 +10,9 @@
       - nginx
     state: present
 
-- name: Ensure subscription payload directory
-  ansible.builtin.file:
-    path: /var/lib/vpn-sub
-    state: directory
-    owner: root
-    group: www-data
-    mode: "0750"
-
-- name: Drop revoked-token map (read by nginx)
-  # `template.validate` would need to call `nginx -t -c %s` on a single
-  # `map …` snippet, which fails outside the http {} context. Render
-  # plainly and validate the full config below.
-  ansible.builtin.template:
-    src: revoked-tokens.map.j2
-    # Debian's default nginx.conf includes /etc/nginx/conf.d/*.conf only,
-    # so the map snippet must use a .conf extension to be loaded.
-    dest: /etc/nginx/conf.d/vpn-sub-revoked.conf
-    owner: root
-    group: root
-    mode: "0644"
-  no_log: true
-  diff: false
-  notify: Reload nginx
+# ---------------------------------------------------------------------------
+# nginx layer (TLS + rate-limit only).
+# ---------------------------------------------------------------------------
 
 - name: Drop rate-limit zone (http-level)
   ansible.builtin.copy:
@@ -45,6 +24,12 @@
       # Per-IP rate limit zone for the subscription host.
       # zone size 10m holds ~160k state entries; rate {{ subscription.rate_limit | default('5r/m') }}.
       limit_req_zone $binary_remote_addr zone=vpn_sub_per_ip:10m rate={{ subscription.rate_limit | default('5r/m') }};
+  notify: Reload nginx
+
+- name: Remove legacy revoked-tokens nginx map (revocation lives in the Python service)
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d/vpn-sub-revoked.conf
+    state: absent
   notify: Reload nginx
 
 - name: Drop subscription site
@@ -64,56 +49,80 @@
     force: true
   notify: Reload nginx
 
-- name: Validate the full nginx config now the subscription site is enabled
+- name: Validate the full nginx config
   ansible.builtin.command:
     cmd: nginx -t
   changed_when: false
 
 # ---------------------------------------------------------------------------
-# One-time bootstrap token server (optional, off by default).
+# vpn-bootstrap Python service — always installed when this role runs.
+# Handles /sub/ AND /bootstrap/ behind hashed-on-disk storage.
 # ---------------------------------------------------------------------------
-- name: Bootstrap — ensure system user
+
+- name: Ensure system user
   ansible.builtin.user:
     name: vpn-bootstrap
     system: true
     shell: /usr/sbin/nologin
-    home: "{{ subscription.bootstrap_dir | default('/var/lib/vpn-bootstrap') }}"
+    home: "{{ subscription.subscription_dir | default('/var/lib/vpn-subscription') }}"
     create_home: false
-  when: subscription.enable_bootstrap | default(false)
 
-- name: Bootstrap — payload directory
+- name: Ensure subscription dir + per-route subdirs
   ansible.builtin.file:
-    path: "{{ subscription.bootstrap_dir | default('/var/lib/vpn-bootstrap') }}"
+    path: "{{ item }}"
     state: directory
     owner: vpn-bootstrap
     group: vpn-bootstrap
     mode: "0700"
-  when: subscription.enable_bootstrap | default(false)
+  loop:
+    - "{{ subscription.subscription_dir | default('/var/lib/vpn-subscription') }}"
+    - "{{ subscription.subscription_dir | default('/var/lib/vpn-subscription') }}/sub"
+    - "{{ subscription.subscription_dir | default('/var/lib/vpn-subscription') }}/bootstrap"
 
-- name: Bootstrap — install service script
+- name: Ensure reads-log directory
+  ansible.builtin.file:
+    path: "{{ subscription.reads_log | default('/var/log/vpn-subscription/reads.log') | dirname }}"
+    state: directory
+    owner: vpn-bootstrap
+    group: vpn-bootstrap
+    mode: "0750"
+
+- name: Render revoked-hashes file
+  ansible.builtin.copy:
+    dest: "{{ subscription.revoked_file | default('/var/lib/vpn-subscription/revoked') }}"
+    owner: vpn-bootstrap
+    group: vpn-bootstrap
+    mode: "0600"
+    content: |
+      # Managed by Ansible role subscription-host. One sha256 hex per line.
+      # The Python service re-reads this file on every request.
+      {% for h in subscription.revoked_token_hashes | default([]) %}
+      {{ h }}
+      {% endfor %}
+  no_log: true
+  diff: false
+
+- name: Install service script
   ansible.builtin.template:
     src: vpn-bootstrap.py.j2
     dest: /usr/local/bin/vpn-bootstrap.py
     owner: root
     group: root
     mode: "0755"
-  when: subscription.enable_bootstrap | default(false)
   notify: Restart vpn-bootstrap
 
-- name: Bootstrap — install systemd unit
+- name: Install systemd unit
   ansible.builtin.template:
     src: vpn-bootstrap.service.j2
     dest: /etc/systemd/system/vpn-bootstrap.service
     owner: root
     group: root
     mode: "0644"
-  when: subscription.enable_bootstrap | default(false)
   notify: Restart vpn-bootstrap
 
-- name: Bootstrap — enable + start service
+- name: Enable + start service
   ansible.builtin.systemd_service:
     name: vpn-bootstrap.service
     enabled: true
     state: started
     daemon_reload: true
-  when: subscription.enable_bootstrap | default(false)

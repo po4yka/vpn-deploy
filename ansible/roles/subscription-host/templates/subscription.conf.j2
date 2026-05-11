@@ -15,24 +15,28 @@ server {
     add_header Cache-Control "no-store" always;
     add_header Referrer-Policy "no-referrer" always;
 
-    # Token-keyed payload: /sub/<token>
-    # Captures the token into $vpn_sub_token so the revocation map can read it.
-    # Quote the regex: nginx parses bare `{16,64}` as a block opener.
+    # Long-lived /sub/<token>. Proxied to the local vpn-bootstrap
+    # service, which:
+    #   * hashes the URL token with sha256
+    #   * reads payload from <subscription_dir>/sub/<hash>
+    #   * checks <hash>.meta for expiry
+    #   * consults the revocation file
+    #   * writes a read-audit JSONL record
+    # nginx fronts only TLS + rate-limit.
     location ~ "^/sub/(?<vpn_sub_token>[A-Za-z0-9_-]{16,64})$" {
-        # Short-circuit revoked tokens (map lives in conf.d/vpn-sub-revoked.conf)
-        if ($vpn_sub_revoked = 1) {
-            return 410;
-        }
-
-        # Rate-limit per source IP (zone defined in conf.d/vpn-sub-ratelimit.conf)
         limit_req zone=vpn_sub_per_ip burst={{ subscription.rate_burst | default(3) }} nodelay;
         limit_req_status 429;
 
-        alias /var/lib/vpn-sub/$vpn_sub_token;
-        default_type application/json;
-        try_files $uri =404;
+        proxy_pass http://{{ subscription.bootstrap_listen_addr | default('127.0.0.1') }}:{{ subscription.bootstrap_listen_port | default(8445) }};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
 
-        # No access logging on the subscription host — privacy invariant.
+        # Make Cache-Control / Referrer-Policy explicit at the location
+        # level — see /bootstrap/ for the inheritance-reset rationale.
+        add_header Cache-Control "no-store"     always;
+        add_header Referrer-Policy "no-referrer" always;
+
         access_log off;
     }
 

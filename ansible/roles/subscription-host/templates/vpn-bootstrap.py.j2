@@ -1,28 +1,51 @@
 #!/usr/bin/env python3
-"""One-time bootstrap token server. Listens on 127.0.0.1; nginx proxies
-/bootstrap/<token> requests to us. We look up the token in
-/var/lib/vpn-bootstrap/<token>, return its contents once, then delete
-the file atomically. Subsequent requests for the same token get 410.
+"""Subscription delivery service. Listens on 127.0.0.1; nginx proxies
+both /bootstrap/<token> (single-use) and /sub/<token> (long-lived).
 
-The server has no auth of its own — the bootstrap token IS the bearer.
-Nginx is the only allowed peer; nginx does the rate-limit and TLS.
+Three properties matter:
+
+  * Hashed-on-disk storage. The plaintext token never touches disk —
+    the operator hands the URL to the client, the service hashes the
+    inbound URL token with sha256 and reads from
+    subscription_dir/<route>/<hex>. A disk copy alone is not a usable
+    subscription URL.
+
+  * Per-token expiry. The sidecar <hash>.meta JSON file can carry an
+    `expires` field (ISO date string or unix epoch). The service
+    refuses to serve and on /bootstrap/ also deletes both files.
+
+  * Audit log of reads. One JSONL record per successful or rejected
+    fetch, written to reads_log. Records carry only the hash prefix
+    (first 8 chars), source IP, route, and bytes — enough to detect
+    mass-pull patterns without leaking secrets to disk.
+
+Revocation: the file revoked_file holds one hash per line. The service
+reloads it on every request so updates take effect instantly without
+needing a service restart.
 
 Managed by Ansible role subscription-host; do not hand-edit.
 """
 from __future__ import annotations
 
+import datetime as _dt
+import hashlib
+import json
 import logging
 import os
 import pathlib
 import re
+import socket
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-BOOTSTRAP_DIR = pathlib.Path("{{ subscription.bootstrap_dir | default('/var/lib/vpn-bootstrap') }}")
-TOKEN_RE = re.compile(r"^/bootstrap/([A-Za-z0-9_-]{16,64})$")
-LISTEN_ADDR = "{{ subscription.bootstrap_listen_addr | default('127.0.0.1') }}"
-LISTEN_PORT = {{ subscription.bootstrap_listen_port | default(8445) }}
+SUBSCRIPTION_DIR = pathlib.Path("{{ subscription.subscription_dir | default('/var/lib/vpn-subscription') }}")
+LISTEN_ADDR      = "{{ subscription.bootstrap_listen_addr | default('127.0.0.1') }}"
+LISTEN_PORT      = {{ subscription.bootstrap_listen_port | default(8445) }}
+READS_LOG        = pathlib.Path("{{ subscription.reads_log | default('/var/log/vpn-subscription/reads.log') }}")
+REVOKED_FILE     = pathlib.Path("{{ subscription.revoked_file | default('/var/lib/vpn-subscription/revoked') }}")
+
+PATH_RE = re.compile(r"^/(bootstrap|sub)/([A-Za-z0-9_-]{16,64})$")
 
 _lock = threading.Lock()
 
@@ -33,63 +56,121 @@ logging.basicConfig(
 )
 
 
+def _hash(token: str) -> str:
+    return hashlib.sha256(token.encode("ascii")).hexdigest()
+
+
+def _is_revoked(token_hash: str) -> bool:
+    try:
+        # Re-read every call — the revoked list is small (line count grows
+        # with operator-side rotation cadence, not with client count) and
+        # the read is amortised by the per-IP nginx rate limit.
+        with REVOKED_FILE.open("r", encoding="ascii") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if line == token_hash:
+                    return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
+    return False
+
+
+def _audit(route: str, token_hash: str, outcome: str, src_ip: str, n_bytes: int) -> None:
+    record = {
+        "ts": int(_dt.datetime.now(tz=_dt.timezone.utc).timestamp()),
+        "iso": _dt.datetime.now(tz=_dt.timezone.utc).isoformat(timespec="seconds"),
+        "route": route,
+        "token_prefix": token_hash[:8],
+        "outcome": outcome,
+        "src_ip": src_ip,
+        "bytes": n_bytes,
+    }
+    try:
+        READS_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with READS_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, sort_keys=True) + "\n")
+    except OSError as exc:
+        logging.warning("audit append failed: %s", exc)
+
+
+def _expired(meta_path: pathlib.Path) -> bool:
+    if not meta_path.is_file():
+        return False
+    try:
+        meta = json.loads(meta_path.read_text())
+    except (OSError, ValueError):
+        return False
+    expires = meta.get("expires")
+    if expires is None:
+        return False
+    now = _dt.datetime.now(tz=_dt.timezone.utc)
+    if isinstance(expires, (int, float)):
+        exp_dt = _dt.datetime.fromtimestamp(float(expires), tz=_dt.timezone.utc)
+    else:
+        try:
+            exp_dt = _dt.datetime.fromisoformat(str(expires)).replace(
+                tzinfo=_dt.timezone.utc)
+        except ValueError:
+            return False
+    return exp_dt < now
+
+
 class Handler(BaseHTTPRequestHandler):
-    def log_message(self, fmt, *args):  # noqa: D401  -- silence default access log
-        # We log only token outcomes (consumed / unknown / repeat),
-        # never the URL path, to keep the access pattern out of disk
-        # logs. Errors still go to systemd journal via stderr.
+    def log_message(self, fmt, *args):  # silence default per-request log
         return
 
+    def _src_ip(self) -> str:
+        return self.headers.get("X-Real-IP") or self.client_address[0]
+
     def do_GET(self):  # noqa: N802
-        m = TOKEN_RE.match(self.path)
+        m = PATH_RE.match(self.path)
         if not m:
             self.send_error(404)
             return
-        token = m.group(1)
-        path = BOOTSTRAP_DIR / token
-        meta_path = BOOTSTRAP_DIR / f"{token}.meta"
+        route, token = m.group(1), m.group(2)
+        token_hash = _hash(token)
+        src_ip = self._src_ip()
+        route_dir = SUBSCRIPTION_DIR / route
+        path = route_dir / token_hash
+        meta_path = route_dir / f"{token_hash}.meta"
+        single_use = (route == "bootstrap")
+
         with _lock:
+            if _is_revoked(token_hash):
+                _audit(route, token_hash, "revoked", src_ip, 0)
+                self.send_error(410, "Gone")
+                return
             try:
                 data = path.read_bytes()
             except FileNotFoundError:
-                logging.info("token %s: unknown or already consumed", token[:8])
+                _audit(route, token_hash, "unknown", src_ip, 0)
                 self.send_error(410, "Gone")
                 return
-            # Optional per-token expiry. The sidecar carries either an ISO
-            # date string or a unix-epoch integer; either is fine.
-            if meta_path.is_file():
-                try:
-                    import json as _json
-                    meta = _json.loads(meta_path.read_text())
-                except (OSError, ValueError):
-                    meta = {}
-                expires = meta.get("expires")
-                if expires is not None:
-                    import datetime as _dt
-                    now = _dt.datetime.now(tz=_dt.timezone.utc)
-                    if isinstance(expires, (int, float)):
-                        exp_dt = _dt.datetime.fromtimestamp(expires, tz=_dt.timezone.utc)
-                    else:
-                        try:
-                            exp_dt = _dt.datetime.fromisoformat(str(expires)).replace(
-                                tzinfo=_dt.timezone.utc)
-                        except ValueError:
-                            exp_dt = None
-                    if exp_dt is not None and exp_dt < now:
-                        logging.info("token %s: expired (%s)", token[:8], expires)
-                        # Atomically remove both to prevent re-serving.
-                        try: path.unlink()
-                        except FileNotFoundError: pass
-                        try: meta_path.unlink()
-                        except FileNotFoundError: pass
-                        self.send_error(410, "Gone")
-                        return
-            # Atomic consume: delete payload first, then meta (best-effort).
-            path.unlink()
-            if meta_path.is_file():
-                try: meta_path.unlink()
+            if _expired(meta_path):
+                _audit(route, token_hash, "expired", src_ip, 0)
+                # On /bootstrap/, purge the payload so the next read for
+                # the same token also returns 410 fast. On /sub/, leave
+                # the payload — an admin may bump the .meta date.
+                if single_use:
+                    try: path.unlink()
+                    except FileNotFoundError: pass
+                    try: meta_path.unlink()
+                    except FileNotFoundError: pass
+                self.send_error(410, "Gone")
+                return
+            if single_use:
+                # Atomic consume — payload first, then meta best-effort.
+                try: path.unlink()
                 except FileNotFoundError: pass
-        logging.info("token %s: consumed (%d bytes)", token[:8], len(data))
+                if meta_path.is_file():
+                    try: meta_path.unlink()
+                    except FileNotFoundError: pass
+
+        _audit(route, token_hash, "consumed", src_ip, len(data))
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
@@ -100,9 +181,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    BOOTSTRAP_DIR.mkdir(parents=True, exist_ok=True)
+    for sub in ("bootstrap", "sub"):
+        (SUBSCRIPTION_DIR / sub).mkdir(parents=True, exist_ok=True)
+    READS_LOG.parent.mkdir(parents=True, exist_ok=True)
+    REVOKED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not REVOKED_FILE.exists():
+        REVOKED_FILE.touch(mode=0o600)
     server = ThreadingHTTPServer((LISTEN_ADDR, LISTEN_PORT), Handler)
-    logging.info("listening on http://%s:%d/", LISTEN_ADDR, LISTEN_PORT)
+    logging.info("listening on http://%s:%d/  dir=%s",
+                 LISTEN_ADDR, LISTEN_PORT, SUBSCRIPTION_DIR)
     try:
         server.serve_forever()
     finally:

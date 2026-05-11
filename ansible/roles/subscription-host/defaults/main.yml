@@ -12,6 +12,26 @@ subscription:
   # atomically reads and deletes the payload file on first successful
   # GET, so the token is single-use.
   enable_bootstrap: false
-  bootstrap_dir: /var/lib/vpn-bootstrap
+  # The local Python service handles BOTH /bootstrap/<token> (single-
+  # use) and /sub/<token> (long-lived). Both routes use hashed-on-disk
+  # storage: the operator hands the client a plaintext token, the
+  # service hashes the inbound URL with sha256 and reads from
+  # subscription_dir/<route>/<hash>. Disk theft alone never yields a
+  # usable subscription URL.
+  subscription_dir: /var/lib/vpn-subscription
   bootstrap_listen_addr: "127.0.0.1"
   bootstrap_listen_port: 8445
+  # Server-side audit log for token reads. JSONL, one record per
+  # successful or rejected fetch. Carries only the first 8 chars of
+  # the SHA256 hash (not the plaintext token), source IP, route, and
+  # bytes served — enough to detect mass-pull patterns without
+  # leaking secrets to disk.
+  reads_log: /var/log/vpn-subscription/reads.log
+  # Revocation: one sha256 hash per line. Reloaded on every request,
+  # so updates to the file take effect on next read without needing
+  # a service restart.
+  revoked_file: /var/lib/vpn-subscription/revoked
+  # Kept for backward-compat with sites that still set
+  # subscription.bootstrap_dir; the service no longer reads from this
+  # path. New deploys should not set it.
+  bootstrap_dir: ""

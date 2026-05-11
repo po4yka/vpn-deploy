@@ -1,5 +1,5 @@
 [Unit]
-Description=VPN subscription one-time bootstrap token server
+Description=VPN subscription delivery service (/sub/ + /bootstrap/)
 Documentation=https://github.com/po4yka/vpn-deploy/blob/main/docs/SUBSCRIPTION-PLANE.md
 After=network-online.target
 Wants=network-online.target
@@ -17,7 +17,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths={{ subscription.bootstrap_dir | default('/var/lib/vpn-bootstrap') }}
+ReadWritePaths={{ subscription.subscription_dir | default('/var/lib/vpn-subscription') }} {{ subscription.reads_log | default('/var/log/vpn-subscription/reads.log') | dirname }}
 ProtectControlGroups=true
 ProtectKernelLogs=true
 ProtectKernelModules=true
