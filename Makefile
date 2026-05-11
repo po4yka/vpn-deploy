@@ -16,7 +16,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         molecule-test smoke-test validate-target scan-targets blue-green \
         spot-check-secrets bootstrap-secrets probe-asn emit-qr check-certs \
         audit-permissions asn-drift check-ip-reputation issue-bootstrap \
-        test-tls-policing
+        test-tls-policing fleet-status
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -63,6 +63,7 @@ help:
 	@echo "  check-ip-reputation  Spamhaus / FireHOL / AbuseIPDB (key opt) check; alert via ntfy"
 	@echo "  issue-bootstrap CLIENT=…  Issue a one-time /bootstrap/<token> URL"
 	@echo "  test-tls-policing HOST=… Probe the ~12-concurrent-TLS home-ISP rule"
+	@echo "  fleet-status [HOSTS=…]   Summary table across every host:env pair"
 	@echo "  blue-green GREEN_ENV=<name>  Orchestrate blue-green replacement"
 
 check-prereqs:
@@ -219,6 +220,9 @@ test-tls-policing:
 	./scripts/test-tls-policing.sh --host $(HOST) \
 	  $(if $(PORT),--port $(PORT)) \
 	  $(if $(STEPS),--steps $(STEPS))
+
+fleet-status:
+	./scripts/fleet-status.sh
 
 scan-targets:
 	@test -n "$(SEEDS)$(CIDR)$(CRAWL)" || { \
