@@ -1,0 +1,156 @@
+---
+name: real-vps-deploy
+
+# Ephemeral end-to-end deploy gate. Provisions a fresh UpCloud VPS,
+# runs site.yml + verify + smoke-test against it, then destroys
+# everything. Approximates a production deploy as closely as the CI
+# environment allows — closer than the docker-only molecule scenarios
+# can.
+#
+# Triggered manually (workflow_dispatch) or by adding the
+# `ci-real-deploy` label to a pull request. Not on every push: this
+# burns provider credit and runs ~15-20 minutes.
+#
+# Required secrets:
+#   UPCLOUD_USERNAME             sub-account with VPS create + destroy
+#   UPCLOUD_PASSWORD             …
+#   CI_SOPS_AGE_KEY              age private key for the synthetic
+#                                CI secrets file (separate from any
+#                                operator key)
+#   CI_SSH_PRIVATE_KEY           SSH key for the ephemeral VPS
+#
+# A single concurrency group ensures only one real-VPS-deploy runs at
+# a time across the repo, so we never race two provisions against the
+# UpCloud account.
+
+on:
+  workflow_dispatch:
+    inputs:
+      zone:
+        description: "UpCloud zone (e.g. fi-hel1, de-fra1)"
+        required: false
+        default: "fi-hel1"
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-vps-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Manually-triggered, or PR labeled `ci-real-deploy`.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci-real-deploy'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    env:
+      UPCLOUD_USERNAME: ${{ secrets.UPCLOUD_USERNAME }}
+      UPCLOUD_PASSWORD: ${{ secrets.UPCLOUD_PASSWORD }}
+      ANSIBLE_HOST_KEY_CHECKING: "False"
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Refuse to run on a fork PR
+        if: github.event.pull_request.head.repo.full_name != github.repository
+        run: |
+          echo "::error::real-vps-deploy will not run on a fork PR — secrets are not exposed to forks."
+          exit 1
+
+      - name: Verify required secrets are present
+        run: |
+          for v in UPCLOUD_USERNAME UPCLOUD_PASSWORD CI_SOPS_AGE_KEY CI_SSH_PRIVATE_KEY; do
+            if [ -z "${!v:-}" ] && [ -z "$(printenv "$v" || true)" ]; then
+              echo "::error::Secret $v is unset — configure it in repo settings."
+              exit 1
+            fi
+          done
+        env:
+          CI_SOPS_AGE_KEY: ${{ secrets.CI_SOPS_AGE_KEY }}
+          CI_SSH_PRIVATE_KEY: ${{ secrets.CI_SSH_PRIVATE_KEY }}
+
+      - name: Set up tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip jq age
+          curl -fsSL "https://github.com/getsops/sops/releases/download/v3.9.0/sops-v3.9.0.linux.amd64" -o /usr/local/bin/sops
+          sudo install -m 0755 /usr/local/bin/sops /usr/local/bin/sops
+          curl -fsSL "https://releases.hashicorp.com/terraform/1.9.5/terraform_1.9.5_linux_amd64.zip" -o /tmp/tf.zip
+          (cd /tmp && unzip -o tf.zip && sudo install -m 0755 terraform /usr/local/bin/terraform)
+          pip3 install --user 'ansible-core>=2.19'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Stage SSH key + age key + CI tfvars
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh ~/.config/vpn-provision
+          chmod 0700 ~/.ssh ~/.config/vpn-provision
+          printf '%s\n' "${{ secrets.CI_SSH_PRIVATE_KEY }}" > ~/.ssh/vpn_deploy
+          chmod 0600 ~/.ssh/vpn_deploy
+          ssh-keygen -y -f ~/.ssh/vpn_deploy > ~/.ssh/vpn_deploy.pub
+          printf '%s\n' "${{ secrets.CI_SOPS_AGE_KEY }}" > ~/.config/vpn-provision/age.key
+          chmod 0600 ~/.config/vpn-provision/age.key
+          # CI tfvars: short-lived ephemeral env name so we never
+          # collide with a real prod state file.
+          ts="$(date -u +%Y%m%d-%H%M%S)"
+          ci_env="ci-${{ github.run_id }}-${ts}"
+          echo "CI_ENV=${ci_env}" >> "$GITHUB_ENV"
+          cat > "terraform/providers/upcloud/environments/${ci_env}.tfvars" <<TFVARS
+          server_name          = "vpn-${ci_env}"
+          zone                 = "${{ github.event.inputs.zone || 'fi-hel1' }}"
+          plan                 = "1xCPU-2GB"
+          storage_template     = "REPLACE_WITH_CI_TEMPLATE_UUID"
+          admin_ssh_public_key = file("~/.ssh/vpn_deploy.pub")
+          allowed_ssh_cidrs    = ["0.0.0.0/0"]
+          build_env            = "${ci_env}"
+          TFVARS
+
+      - name: Sanity — refuse to run without a CI template UUID
+        run: |
+          if grep -q REPLACE_WITH_CI_TEMPLATE_UUID "terraform/providers/upcloud/environments/${CI_ENV}.tfvars"; then
+            echo "::error::CI tfvars carries REPLACE_WITH_CI_TEMPLATE_UUID — set CI_UPCLOUD_TEMPLATE_UUID in repo secrets and inline-template it here."
+            exit 1
+          fi
+
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          export ENV="$CI_ENV"
+          export PROVIDER=upcloud
+          export ANSIBLE_SSH_PRIVATE_KEY_FILE="$HOME/.ssh/vpn_deploy"
+          # CI secrets blob is committed encrypted at
+          # secrets/ci.secrets.sops.yaml (a follow-up commit will add
+          # it). For now: synthesize a minimal placeholder if the
+          # file isn't present so the job's structure runs end-to-end.
+          if [ ! -f secrets/ci.secrets.sops.yaml ]; then
+            echo "::warning::secrets/ci.secrets.sops.yaml not committed yet — skipping deploy phase."
+            echo "DEPLOY_SKIPPED=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          export SECRETS_FILE="/tmp/vpn-${CI_ENV}.secrets.yaml"
+          sops --decrypt secrets/ci.secrets.sops.yaml > "$SECRETS_FILE"
+          chmod 0600 "$SECRETS_FILE"
+          make init plan apply inventory wait dry-run deploy verify smoke-test
+
+      - name: Always destroy the ephemeral VPS
+        if: always() && env.DEPLOY_SKIPPED != '1'
+        run: |
+          set -euo pipefail
+          export ENV="$CI_ENV"
+          export PROVIDER=upcloud
+          # Skip the double-confirmation prompt — CI is the explicit
+          # destroy authority for these short-lived envs.
+          echo "yes" | echo "yes" | make destroy || true
+
+      - name: Cleanup CI tfvars file
+        if: always()
+        run: |
+          rm -f "terraform/providers/upcloud/environments/${CI_ENV}.tfvars" || true

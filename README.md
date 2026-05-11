@@ -57,6 +57,8 @@ Switch via `make PROVIDER=upcloud …`.
     files, audit-log boundaries.
 15. `docs/SUBSCRIPTION-HOST-SEPARATION.md` — run the subscription
     delivery role on a dedicated VPS via `vpn_subscription_only`.
+16. `docs/CI-REAL-DEPLOY.md` — workflow_dispatch ephemeral-UpCloud
+    deploy gate for PRs labelled `ci-real-deploy`.
 
 Operational runbooks: `docs/RUNBOOK-{rotate,rollback,incident,restore,add-fallback}.md`.
 
