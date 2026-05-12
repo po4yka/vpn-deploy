@@ -14,13 +14,12 @@ the host's package manager, not this repo.
 
 Usage:
   scripts/emit-sbom.py                       # writes sbom/example.json
-  VPN_SECRETS_FILE=/tmp/vpn-prod.secrets.yaml scripts/emit-sbom.py
-                                             # writes sbom/<env>.json
+  VPN_SECRETS_FILE=/tmp/vpn-prod.secrets.yaml SBOM_LABEL=prod scripts/emit-sbom.py
+                                             # writes sbom/prod.json
 """
 from __future__ import annotations
 
 import datetime as _dt
-import hashlib
 import json
 import os
 import pathlib
@@ -31,9 +30,10 @@ import uuid
 import yaml
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
-DEFAULT_SECRETS = REPO_ROOT / "secrets" / "prod.secrets.example.yaml"
+DEFAULT_INPUT = REPO_ROOT / "secrets" / "prod.secrets.example.yaml"
 SBOM_DIR = REPO_ROOT / "sbom"
 SBOM_DIR.mkdir(exist_ok=True)
+SAFE_LABEL = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def _purl(scheme: str, *parts: str, **q: str) -> str:
@@ -48,6 +48,22 @@ def _release_hash(label: str, value: str | None) -> dict | None:
     if not value or value == "REPLACE_WITH_RELEASE_SHA256":
         return None
     return {"alg": "SHA-256", "content": value, "label": label}
+
+
+def _public_str(mapping: dict, key: str) -> str | None:
+    value = mapping.get(key)
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def _sbom_label(src_path: pathlib.Path) -> str:
+    if src_path == DEFAULT_INPUT:
+        return "example"
+    label = os.environ.get("SBOM_LABEL", "custom")
+    if not SAFE_LABEL.fullmatch(label) or label in {".", ".."}:
+        raise ValueError("SBOM_LABEL must contain only letters, digits, dots, underscores, or dashes")
+    return label
 
 
 def component(name: str, version: str, purl: str, hashes: list[dict],
@@ -81,65 +97,73 @@ def reali_pin() -> tuple[str, str]:
 
 
 def main() -> int:
-    src_path = pathlib.Path(os.environ.get("VPN_SECRETS_FILE") or DEFAULT_SECRETS)
+    src_path = pathlib.Path(os.environ.get("VPN_SECRETS_FILE") or DEFAULT_INPUT)
     if not src_path.exists():
-        print(f"missing: {src_path}", file=sys.stderr)
+        print("input config is missing", file=sys.stderr)
         return 2
     data = yaml.safe_load(src_path.read_text()) or {}
-    label = "example" if src_path == DEFAULT_SECRETS else src_path.stem
+    try:
+        label = _sbom_label(src_path)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
 
     components: list[dict] = []
 
     xray = data.get("xray") or {}
-    if "version" in xray:
+    xray_version = _public_str(xray, "version")
+    if xray_version:
         components.append(component(
             "xray-core",
-            xray["version"],
-            _purl("github", "XTLS", "Xray-core", version=xray["version"]),
+            xray_version,
+            _purl("github", "XTLS", "Xray-core", version=xray_version),
             [
-                _release_hash("linux_amd64", xray.get("linux_amd64_sha256")),
-                _release_hash("linux_arm64", xray.get("linux_arm64_sha256")),
+                _release_hash("linux_amd64", _public_str(xray, "linux_amd64_sha256")),
+                _release_hash("linux_arm64", _public_str(xray, "linux_arm64_sha256")),
             ],
-            f"https://github.com/XTLS/Xray-core/releases/tag/{xray['version']}",
+            f"https://github.com/XTLS/Xray-core/releases/tag/{xray_version}",
             "P0 transport — VLESS+REALITY+XTLS-Vision",
         ))
 
     hys = data.get("hysteria") or {}
-    if "version" in hys:
+    hys_version = _public_str(hys, "version")
+    if hys_version:
         components.append(component(
             "hysteria",
-            hys["version"],
-            _purl("github", "apernet", "hysteria", version=hys["version"]),
+            hys_version,
+            _purl("github", "apernet", "hysteria", version=hys_version),
             [
-                _release_hash("linux_amd64", hys.get("linux_amd64_sha256")),
-                _release_hash("linux_arm64", hys.get("linux_arm64_sha256")),
+                _release_hash("linux_amd64", _public_str(hys, "linux_amd64_sha256")),
+                _release_hash("linux_arm64", _public_str(hys, "linux_arm64_sha256")),
             ],
-            f"https://github.com/apernet/hysteria/releases/tag/{hys['version']}",
+            f"https://github.com/apernet/hysteria/releases/tag/{hys_version}",
             "P2 transport — Hysteria2 UDP/QUIC",
         ))
 
     geo = data.get("geodata") or {}
-    if geo.get("geosite_url"):
+    geosite_url = _public_str(geo, "geosite_url")
+    if geosite_url:
         components.append(component(
             "geosite",
             "pinned",
-            _purl("generic", "geosite", url=geo["geosite_url"]),
-            [_release_hash("geosite", geo.get("geosite_sha256"))],
-            geo["geosite_url"],
+            _purl("generic", "geosite", url=geosite_url),
+            [_release_hash("geosite", _public_str(geo, "geosite_sha256"))],
+            geosite_url,
             "Xray routing geosite database",
         ))
-    if geo.get("geoip_url"):
+    geoip_url = _public_str(geo, "geoip_url")
+    if geoip_url:
         components.append(component(
             "geoip",
             "pinned",
-            _purl("generic", "geoip", url=geo["geoip_url"]),
-            [_release_hash("geoip", geo.get("geoip_sha256"))],
-            geo["geoip_url"],
+            _purl("generic", "geoip", url=geoip_url),
+            [_release_hash("geoip", _public_str(geo, "geoip_sha256"))],
+            geoip_url,
             "Xray routing geoip database",
         ))
 
-    awg_go = data.get("amneziawg_go_version")
-    awg_tools = data.get("amneziawg_tools_version")
+    awg_go = _public_str(data, "amneziawg_go_version")
+    awg_tools = _public_str(data, "amneziawg_tools_version")
     if awg_go:
         components.append(component(
             "amneziawg-go", awg_go,
@@ -187,8 +211,7 @@ def main() -> int:
     out = SBOM_DIR / f"{label}.json"
     payload = json.dumps(sbom, indent=2, sort_keys=False) + "\n"
     out.write_text(payload)
-    digest = hashlib.sha256(payload.encode()).hexdigest()[:16]
-    print(f"wrote {out}  ({len(components)} components, sha256: {digest}…)")
+    print(f"wrote {out}  ({len(components)} components)")
     return 0
 
 

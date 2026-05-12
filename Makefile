@@ -356,7 +356,7 @@ tspu-canary:
 	./scripts/tspu-canary.sh
 
 emit-sbom:
-	VPN_SECRETS_FILE=$(SECRETS_FILE) python3 ./scripts/emit-sbom.py
+	VPN_SECRETS_FILE=$(SECRETS_FILE) SBOM_LABEL=$(ENV) python3 ./scripts/emit-sbom.py
 
 audit-log:
 	./scripts/audit-log.sh read

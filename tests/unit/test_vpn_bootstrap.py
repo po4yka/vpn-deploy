@@ -60,6 +60,7 @@ def service(tmp_path):
         loader=FileSystemLoader(str(TEMPLATE.parent)),
         undefined=StrictUndefined,
         keep_trailing_newline=True,
+        autoescape=True,
     )
     rendered = env.get_template(TEMPLATE.name).render(
         subscription={
