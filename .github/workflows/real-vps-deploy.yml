@@ -36,13 +36,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  # Distinct group per distro so a Debian fan-out can run alongside an
-  # Ubuntu one. Within a distro, serialise — we still don't want two
-  # parallel provisions for the same template against UpCloud.
-  group: real-vps-deploy-${{ matrix.distro || 'single' }}
-  cancel-in-progress: false
-
 jobs:
   deploy:
     # Manually-triggered, or PR labeled `ci-real-deploy`.
@@ -66,6 +59,12 @@ jobs:
             template_secret_name: CI_UPCLOUD_TEMPLATE_UUID_UBUNTU24
 
     name: real-vps-deploy (${{ matrix.distro }})
+    # Distinct group per distro so a Debian fan-out can run alongside an
+    # Ubuntu one. Within a distro, serialise — we still don't want two
+    # parallel provisions for the same template against UpCloud.
+    concurrency:
+      group: real-vps-deploy-${{ matrix.distro }}
+      cancel-in-progress: false
 
     env:
       UPCLOUD_USERNAME: ${{ secrets.UPCLOUD_USERNAME }}

@@ -11,6 +11,7 @@ yamllint==1.38.0
 # transitively by ansible-lint, no explicit pin here).
 PyYAML==6.0.3
 Jinja2==3.1.6
+referencing<0.37
 
 # pytest is NOT pinned here — it's not part of the deploy runtime;
 # the ci-fast job installs pytest separately with an explicit

@@ -16,6 +16,14 @@ variable "plan" {
 variable "storage_template" {
   type        = string
   description = "Storage template UUID to clone from. Pin to a specific Debian 13 / Ubuntu 24.04 template."
+
+  validation {
+    condition = can(regex(
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      var.storage_template,
+    ))
+    error_message = "storage_template must be a UUID-shaped UpCloud template, not a placeholder."
+  }
 }
 
 variable "storage_size_gb" {

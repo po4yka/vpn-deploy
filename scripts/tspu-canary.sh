@@ -21,7 +21,6 @@
 #   plain-https   — control: GET / over plain TLS to a baseline site
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STATE_DIR="${HOME}/.cache/vpn-deploy/tspu-canary"
 mkdir -p "$STATE_DIR"
 

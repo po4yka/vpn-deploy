@@ -105,6 +105,7 @@
   ansible.builtin.shell:
     cmd: |
       set -e
+      set -o pipefail
       got=$(sha256sum {{ xray_install_dir }}/releases/{{ xray.version }}/xray | awk '{print $1}')
       want={{ xray_sha256 | quote }}
       if [ "$want" != "REPLACE_WITH_RELEASE_SHA256" ] && [ -n "$want" ]; then
@@ -113,6 +114,7 @@
           exit 1
         fi
       fi
+    executable: /bin/bash
   changed_when: false
   when:
     - vpn.build_xray_from_source | default(false)

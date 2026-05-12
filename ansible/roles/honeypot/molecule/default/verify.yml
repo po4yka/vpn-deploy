@@ -12,7 +12,8 @@
 
     - name: Listener bound on configured port
       ansible.builtin.shell:
-        cmd: "ss -lnt | awk '{print $4}' | grep -E ':4443$'"
+        cmd: "set -o pipefail && ss -lnt | awk '{print $4}' | grep -E ':4443$'"
+        executable: /bin/bash
       register: bound
       changed_when: false
       failed_when: bound.rc != 0

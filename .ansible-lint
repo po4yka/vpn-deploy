@@ -35,3 +35,5 @@ exclude_paths:
   - .ansible/
   - .venv/
   - ansible/inventory/generated.ini
+  - ansible/molecule/full-stack/test-secrets.yaml
+  - molecule/full-stack/test-secrets.yaml

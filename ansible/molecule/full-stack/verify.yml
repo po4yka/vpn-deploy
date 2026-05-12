@@ -23,13 +23,14 @@
 
     - name: nftables ruleset has the REALITY port open
       ansible.builtin.shell:
-        cmd: "nft list ruleset inet | grep -E 'tcp dport 443' | head -1"
+        cmd: "set -o pipefail && nft list ruleset inet | grep -E 'tcp dport 443' | head -1"
+        executable: /bin/bash
       register: nft_443
       changed_when: false
       failed_when: nft_443.stdout == ""
 
     - name: probe_offenders set is declared (probe-ratelimit ON)
-      ansible.builtin.shell:
+      ansible.builtin.command:
         cmd: "nft list set inet filter probe_offenders"
       register: nft_set
       changed_when: false
@@ -37,21 +38,24 @@
 
     - name: Honeypot listener is bound
       ansible.builtin.shell:
-        cmd: "ss -lnt | awk '{print $4}' | grep -E ':4443$'"
+        cmd: "set -o pipefail && ss -lnt | awk '{print $4}' | grep -E ':4443$'"
+        executable: /bin/bash
       register: honey_listen
       changed_when: false
       failed_when: honey_listen.rc != 0
 
     - name: REALITY listener is bound
       ansible.builtin.shell:
-        cmd: "ss -lnt | awk '{print $4}' | grep -E ':443$'"
+        cmd: "set -o pipefail && ss -lnt | awk '{print $4}' | grep -E ':443$'"
+        executable: /bin/bash
       register: reality_listen
       changed_when: false
       failed_when: reality_listen.rc != 0
 
     - name: Hysteria UDP listener is bound
       ansible.builtin.shell:
-        cmd: "ss -lnu | awk '{print $4}' | grep -E ':443$'"
+        cmd: "set -o pipefail && ss -lnu | awk '{print $4}' | grep -E ':443$'"
+        executable: /bin/bash
       register: hys_listen
       changed_when: false
       failed_when: hys_listen.rc != 0

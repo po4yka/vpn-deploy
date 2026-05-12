@@ -89,7 +89,6 @@ count_reachable() {
   while IFS= read -r pair; do
     [[ -z "$pair" ]] && continue
     local prov="${pair%:*}"
-    local env="${pair#*:}"
     local tf="${REPO_ROOT}/terraform/providers/${prov}"
     local ip
     ip="$(terraform -chdir="$tf" output -raw server_ipv4 2>/dev/null || true)"
@@ -139,8 +138,8 @@ for idx in $(seq "$start_idx" $((total - 1))); do
     ${green_zone:+GREEN_ZONE="$green_zone"} \
     "${REPO_ROOT}/scripts/blue-green.sh"
 
-  jq --argjson idx "$((idx+1))" --arg done "${prov}:${blue_env}→${green_env}" \
-    '.next_idx = $idx | .completed += [$done]' \
+  jq --argjson idx "$((idx+1))" --arg completed_entry "${prov}:${blue_env}→${green_env}" \
+    '.next_idx = $idx | .completed += [$completed_entry]' \
     "$STATE" > "${STATE}.tmp" && mv "${STATE}.tmp" "$STATE"
 done
 

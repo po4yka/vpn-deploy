@@ -32,8 +32,8 @@ run "firewall_opens_reality_tcp_443_v4_and_v6" {
   assert {
     condition = length([
       for r in upcloud_firewall_rules.vpn.firewall_rule :
-      r if r.protocol == "tcp" && r.destination_port_start == "443"
-    ]) >= 2
+      r if startswith(r.comment, "TCP/443 VLESS+REALITY")
+    ]) == 2
     error_message = "REALITY must accept TCP/443 on both IPv4 and IPv6 by default"
   }
 }
@@ -51,8 +51,8 @@ run "firewall_opens_hysteria_udp_443_when_enabled" {
   assert {
     condition = length([
       for r in upcloud_firewall_rules.vpn.firewall_rule :
-      r if r.protocol == "udp" && r.destination_port_start == "443"
-    ]) >= 2
+      r if r.comment == "UDP/443 Hysteria2"
+    ]) == 2
     error_message = "enable_hysteria=true must open UDP/443 on v4+v6"
   }
 }
@@ -67,7 +67,7 @@ run "firewall_drops_hysteria_udp_443_when_disabled" {
   assert {
     condition = length([
       for r in upcloud_firewall_rules.vpn.firewall_rule :
-      r if r.protocol == "udp" && r.destination_port_start == "443"
+      r if r.comment == "UDP/443 Hysteria2"
     ]) == 0
     error_message = "enable_hysteria=false must NOT open UDP/443 — silent leak surface"
   }
@@ -90,7 +90,7 @@ run "firewall_ssh_count_matches_allowed_cidrs" {
   assert {
     condition = length([
       for r in upcloud_firewall_rules.vpn.firewall_rule :
-      r if r.destination_port_start == "22"
+      r if startswith(r.comment, "SSH allow ")
     ]) == length(var.allowed_ssh_cidrs)
     error_message = "SSH rule count must equal allowed_ssh_cidrs length"
   }
@@ -102,7 +102,7 @@ run "firewall_ssh_never_world_readable" {
   assert {
     condition = length([
       for r in upcloud_firewall_rules.vpn.firewall_rule :
-      r if r.destination_port_start == "22" && r.source_address_start == "0.0.0.0"
+      r if r.comment == "SSH allow 0.0.0.0/0"
     ]) == 0
     error_message = "SSH must never be reachable from 0.0.0.0 — fail closed"
   }
@@ -121,8 +121,8 @@ run "firewall_emits_xhttp_port_when_distinct_from_443" {
   assert {
     condition = length([
       for r in upcloud_firewall_rules.vpn.firewall_rule :
-      r if r.destination_port_start == "8443"
-    ]) >= 2
+      r if r.comment == "TCP/8443 nginx-xhttp"
+    ]) == 2
     error_message = "Distinct XHTTP port must be opened on v4+v6"
   }
 }
@@ -139,8 +139,11 @@ run "firewall_skips_xhttp_port_when_equal_to_443" {
   assert {
     condition = length([
       for r in upcloud_firewall_rules.vpn.firewall_rule :
-      r if r.destination_port_start == "443" && r.protocol == "tcp"
-    ]) == 2
+      r if startswith(r.comment, "TCP/443 VLESS+REALITY")
+    ]) == 2 && length([
+      for r in upcloud_firewall_rules.vpn.firewall_rule :
+      r if r.comment == "TCP/443 nginx-xhttp"
+    ]) == 0
     error_message = "When XHTTP shares :443, no duplicate :443 TCP rule is added"
   }
 }
@@ -155,8 +158,8 @@ run "firewall_default_deny_terminates_both_chains" {
   assert {
     condition = length([
       for r in upcloud_firewall_rules.vpn.firewall_rule :
-      r if r.action == "drop" && r.direction == "in"
-    ]) >= 2
+      r if startswith(r.comment, "default deny inbound")
+    ]) == 2
     error_message = "Default-deny must close both IPv4 and IPv6 inbound chains"
   }
 }

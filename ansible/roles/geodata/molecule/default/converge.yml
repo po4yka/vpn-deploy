@@ -8,9 +8,9 @@
   vars:
     geodata:
       geosite_url: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/download/202401010000/geosite.dat"
-      geoip_url:   "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/download/202401010000/geoip.dat"
+      geoip_url: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/download/202401010000/geoip.dat"
       geosite_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
-      geoip_sha256:   "0000000000000000000000000000000000000000000000000000000000000000"
+      geoip_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
       install_dir: /usr/local/share/xray
       refresh_interval: "1d"
   roles:

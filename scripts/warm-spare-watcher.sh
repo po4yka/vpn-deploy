@@ -45,7 +45,11 @@ streak_file="${STATE_DIR}/blue-failed-streak"
 last_seen_file="${STATE_DIR}/blue-last-seen-unixtime"
 otp_file="${STATE_DIR}/pending-otp"
 
-streak=$(<"$streak_file" 2>/dev/null || echo 0)
+if [[ -f "$streak_file" ]]; then
+  streak="$(<"$streak_file")"
+else
+  streak=0
+fi
 
 if timeout "$PROBE_TIMEOUT" bash -c "</dev/tcp/$blue_ip/443" 2>/dev/null; then
   date +%s > "$last_seen_file"

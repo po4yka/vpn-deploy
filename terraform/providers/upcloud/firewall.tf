@@ -15,7 +15,7 @@ resource "upcloud_firewall_rules" "vpn" {
     action    = "accept"
     direction = "in"
     family    = "IPv6"
-    protocol  = "icmpv6"
+    protocol  = "icmp"
     comment   = "ICMPv6"
   }
 

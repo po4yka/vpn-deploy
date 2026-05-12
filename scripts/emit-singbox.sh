@@ -257,8 +257,8 @@ for i in "${!host_pairs[@]}"; do
         echo "client '$CLIENT_NAME' is not listed in any xray.cohorts[].clients in ${sops_file}" >&2
         exit 1
       fi
-      for i in $(seq 0 $((n_match - 1))); do
-        c="$(jq -c ".[$i]" <<< "$client_cohorts")"
+      for cohort_idx in $(seq 0 $((n_match - 1))); do
+        c="$(jq -c ".[$cohort_idx]" <<< "$client_cohorts")"
         c_name="$(jq -r '.name' <<< "$c")"
         c_port="$(jq -r '.port'  <<< "$c")"
         c_flow="$(jq -r '.flow_mode // "vision"' <<< "$c")"

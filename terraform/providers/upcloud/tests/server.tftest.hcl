@@ -63,12 +63,5 @@ run "rejects_unfilled_template_placeholder" {
     storage_template = "REPLACE_WITH_TEMPLATE_UUID"
   }
 
-  # Module does not constrain this format today; the test documents the
-  # contract operator-side. We don't expect_failures here because the
-  # provider rejects it at apply time. The assertion below makes the
-  # intent visible: any future variable validation should pass it.
-  assert {
-    condition     = can(regex("^[0-9a-f-]{8,}$", var.storage_template))
-    error_message = "storage_template must be a UUID-shaped UpCloud template, not a placeholder"
-  }
+  expect_failures = [var.storage_template]
 }
