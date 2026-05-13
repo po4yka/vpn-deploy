@@ -80,10 +80,21 @@ fi
 # AbuseIPDB — optional, only if key is provided.
 # ---------------------------------------------------------------------------
 if [[ -n "${ABUSEIPDB_KEY:-}" ]]; then
-  score="$(curl -fsS --max-time 10 \
-    -H "Key: ${ABUSEIPDB_KEY}" -H "Accept: application/json" \
-    "https://api.abuseipdb.com/api/v2/check?ipAddress=${IP}&maxAgeInDays=30" \
-    | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['abuseConfidenceScore'])" 2>/dev/null || true)"
+  score="$(ABUSEIPDB_KEY="${ABUSEIPDB_KEY}" IP="${IP}" python3 - <<'PY' 2>/dev/null || true
+import json
+import os
+import urllib.parse
+import urllib.request
+
+query = urllib.parse.urlencode({"ipAddress": os.environ["IP"], "maxAgeInDays": "30"})
+request = urllib.request.Request(
+    f"https://api.abuseipdb.com/api/v2/check?{query}",
+    headers={"Key": os.environ["ABUSEIPDB_KEY"], "Accept": "application/json"},
+)
+with urllib.request.urlopen(request, timeout=10) as response:
+    print(json.load(response)["data"]["abuseConfidenceScore"])
+PY
+  )"
   if [[ "${score:-0}" =~ ^[0-9]+$ ]] && (( score >= 25 )); then
     findings+=("AbuseIPDB: abuseConfidenceScore=${score}")
   fi
