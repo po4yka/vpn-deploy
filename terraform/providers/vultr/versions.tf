@@ -1,6 +1,3 @@
-# Stub — fill in for v1.1. See providers/hetzner/README.md for the
-# implementation pattern; outputs must match the UpCloud module.
-
 terraform {
   required_version = ">= 1.15"
 

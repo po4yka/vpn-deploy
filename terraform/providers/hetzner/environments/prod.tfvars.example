@@ -1,0 +1,21 @@
+# Copy to prod.tfvars and fill. Do NOT commit prod.tfvars.
+
+server_name = "vpn-prod-hel1"
+location    = "hel1"
+server_type = "cpx21"
+image       = "debian-12"
+
+admin_user           = "deploy"
+admin_ssh_public_key = "ssh-ed25519 AAAA_PROD_PUBLIC_KEY operator@laptop"
+
+allowed_ssh_cidrs = [
+  # Replace with your management IP. Never leave 0.0.0.0/0 for SSH.
+  "203.0.113.42/32",
+]
+
+enable_hysteria = true
+build_env       = "prod"
+
+labels = {
+  project = "vpn-deploy"
+}

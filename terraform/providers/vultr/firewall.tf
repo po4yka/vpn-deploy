@@ -1,0 +1,81 @@
+locals {
+  public_networks = {
+    v4 = {
+      ip_type     = "v4"
+      subnet      = "0.0.0.0"
+      subnet_size = 0
+    }
+    v6 = {
+      ip_type     = "v6"
+      subnet      = "::"
+      subnet_size = 0
+    }
+  }
+
+  ssh_cidr_rules = {
+    for cidr in var.allowed_ssh_cidrs : cidr => {
+      ip_type     = strcontains(cidr, ":") ? "v6" : "v4"
+      subnet      = cidrhost(cidr, 0)
+      subnet_size = tonumber(split("/", cidr)[1])
+    }
+  }
+
+  public_tcp_ports = var.nginx_xhttp_public_port == 443 ? toset(["443"]) : toset([
+    "443",
+    tostring(var.nginx_xhttp_public_port),
+  ])
+
+  public_tcp_rules = {
+    for item in setproduct(keys(local.public_networks), local.public_tcp_ports) :
+    "${item[0]}-${item[1]}" => merge(local.public_networks[item[0]], {
+      port = item[1]
+    })
+  }
+}
+
+resource "vultr_firewall_rule" "icmp" {
+  for_each = local.public_networks
+
+  firewall_group_id = vultr_firewall_group.vpn.id
+  protocol          = "icmp"
+  ip_type           = each.value.ip_type
+  subnet            = each.value.subnet
+  subnet_size       = each.value.subnet_size
+  notes             = "ICMP"
+}
+
+resource "vultr_firewall_rule" "ssh" {
+  for_each = local.ssh_cidr_rules
+
+  firewall_group_id = vultr_firewall_group.vpn.id
+  protocol          = "tcp"
+  ip_type           = each.value.ip_type
+  subnet            = each.value.subnet
+  subnet_size       = each.value.subnet_size
+  port              = "22"
+  notes             = "SSH allow ${each.key}"
+}
+
+resource "vultr_firewall_rule" "tcp_public" {
+  for_each = local.public_tcp_rules
+
+  firewall_group_id = vultr_firewall_group.vpn.id
+  protocol          = "tcp"
+  ip_type           = each.value.ip_type
+  subnet            = each.value.subnet
+  subnet_size       = each.value.subnet_size
+  port              = each.value.port
+  notes             = each.value.port == "443" ? "TCP/443 VLESS+REALITY" : "TCP/${each.value.port} nginx-xhttp"
+}
+
+resource "vultr_firewall_rule" "hysteria" {
+  for_each = var.enable_hysteria ? local.public_networks : {}
+
+  firewall_group_id = vultr_firewall_group.vpn.id
+  protocol          = "udp"
+  ip_type           = each.value.ip_type
+  subnet            = each.value.subnet
+  subnet_size       = each.value.subnet_size
+  port              = "443"
+  notes             = "UDP/443 Hysteria2"
+}

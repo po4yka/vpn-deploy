@@ -39,22 +39,15 @@ removing `prevent_destroy`).
 
 ## Pattern 2 — different provider / ASN
 
-Implement the `hetzner` or `vultr` Terraform stub:
+Create a provider-specific environment file, then provision the spare under a
+different `PROVIDER`:
 
 ```bash
-# 1. Copy the UpCloud module shape
-cd terraform/providers/hetzner
-# Replicate variables.tf / main.tf / firewall.tf / outputs.tf shape from
-# providers/upcloud/, swap resources for hcloud_*. Outputs MUST match:
-#   server_ipv4, server_ipv6, admin_user, server_hostname.
-# See providers/hetzner/README.md for the implementation outline.
+cp terraform/providers/hetzner/environments/prod.tfvars.example \
+   terraform/providers/hetzner/environments/prod.tfvars
+$EDITOR terraform/providers/hetzner/environments/prod.tfvars
 
-# 2. New environments file
-mkdir -p environments
-$EDITOR environments/prod.tfvars
-
-# 3. Provision and deploy under the same ENV but a different PROVIDER
-PROVIDER=hetzner make init plan apply inventory wait dry-run deploy verify
+HCLOUD_TOKEN=... PROVIDER=hetzner make init plan apply inventory wait dry-run deploy verify
 ```
 
 Now you have two VPSes in different ASNs. To make them serve different

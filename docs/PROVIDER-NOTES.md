@@ -98,38 +98,45 @@ credentials into `*.tfvars` — the provider reads them from env.
 - Object storage / "Managed Database" features are out of scope here.
 - API rate limit: low, but Terraform's default backoff handles it.
 
-## Hetzner (stub, v1.1)
+## Hetzner (v1.1)
 
-Will use:
+Uses:
 
 - `hcloud_server`, `hcloud_ssh_key`, `hcloud_firewall`,
-  `hcloud_firewall_attachment`.
+  `hcloud_firewall_attachment`, and optional `hcloud_floating_ip`
+  for the honeypot secondary IPv4.
 - ASN AS24940 — flagged in the TCP-freeze rule on RU mobile networks
   (see the "Avoid" tier above). Hetzner remains useful for non-RU-mobile
   cohorts and for development; rotate IPs more aggressively than UpCloud.
 - Cheaper than UpCloud per spec; smaller geographic surface (EU-heavy +
   US East/West, no APAC).
-- IPv6 must be explicitly enabled in `tfvars`; off by default on cheaper
-  plans.
+- IPv6 is enabled by default via `enable_ipv6 = true`; set it false in
+  `tfvars` only for regions or plans where you explicitly do not want it.
+- Credentials come from `HCLOUD_TOKEN`.
 
-## Vultr (stub, v1.1)
+## Vultr (v1.1)
 
-Will use:
+Uses:
 
 - `vultr_instance`, `vultr_ssh_key`, `vultr_firewall_group`,
-  `vultr_firewall_rule`.
+  `vultr_firewall_rule`, and optional `vultr_instance_ipv4`
+  for the honeypot secondary IPv4.
 - Wider region coverage than UpCloud / Hetzner.
 - IP reputation is more variable; rotate regions when burn-check shows
   a region's prefix is RKN-blocked.
+- The provider schema requires an API key in provider config. This root maps
+  sensitive variable `vultr_api_key`; export `TF_VAR_vultr_api_key` instead
+  of writing tokens into tfvars.
 
-## What every provider stub must export for inventory compatibility
+## What every provider root must export for inventory compatibility
 
 `scripts/render-inventory.sh` reads exactly these Terraform outputs:
 
 - `server_ipv4` — required
 - `server_ipv6` — optional, may be `null`
+- `honeypot_ipv4` — optional, may be `null`
 - `admin_user` — required
 - `server_hostname` — required
 
-Stubs that don't export these names will need a parallel branch in the
-script. Keep the names identical to avoid that.
+Provider roots that don't export these names will need a parallel branch in
+the script. Keep the names identical to avoid that.

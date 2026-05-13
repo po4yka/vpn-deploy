@@ -12,14 +12,14 @@ builds.
 Terraform requires every `module "x" { source = "…" }` to use a static
 path; you cannot pick a provider through a variable. Per-provider roots
 give you a clean drop-in: the operator runs `make PROVIDER=upcloud …` (or
-`hetzner`, `vultr` once those stubs are filled in), and the Makefile
-`cd`s into the right directory.
+`hetzner`, `vultr`), and the Makefile `cd`s into the right directory.
 
 ## Switching providers
 
 ```bash
 make PROVIDER=upcloud   init plan apply
-make PROVIDER=hetzner   init plan apply   # once stub is implemented
+make PROVIDER=hetzner   init plan apply
+make PROVIDER=vultr     init plan apply
 ```
 
 The Ansible layer is provider-neutral — only the inventory render script
@@ -37,5 +37,5 @@ follow blue-green or rotate the floating IP. See
 | Provider | Status | Notes |
 |---|---|---|
 | `upcloud` | primary (v1) | Uses `UpCloudLtd/upcloud`. Region `fi-hel1` recommended for EU baseline. |
-| `hetzner` | stub | Pin `hetznercloud/hcloud`. |
-| `vultr`   | stub | Pin `vultr/vultr`. |
+| `hetzner` | implemented (v1.1) | Uses `hetznercloud/hcloud`. Export `HCLOUD_TOKEN` before planning. |
+| `vultr`   | implemented (v1.1) | Uses `vultr/vultr`. Export `TF_VAR_vultr_api_key` before planning. |

@@ -28,8 +28,8 @@ disposable: when an IP burns, recreate from git + secrets, do not repair.
 | Provider | Status |
 |---|---|
 | UpCloud | primary (v1) |
-| Hetzner | stub, ready for v1.1 |
-| Vultr | stub, ready for v1.1 |
+| Hetzner | implemented (v1.1) |
+| Vultr | implemented (v1.1) |
 
 Switch via `make PROVIDER=upcloud …`.
 

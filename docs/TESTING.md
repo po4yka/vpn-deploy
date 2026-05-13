@@ -9,8 +9,8 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 
 | Artifact | Static check | Render check | Functional test (molecule) | Notes |
 |---|---|---|---|---|
-| **Terraform — UpCloud** | `terraform fmt -check` + `terraform validate` (CI) | n/a | n/a | CI matrix runs all three providers (UpCloud, Hetzner, Vultr stubs). |
-| **Terraform — Hetzner / Vultr stubs** | `terraform fmt` + `validate` | n/a | n/a | Stubs only declare provider versions. |
+| **Terraform — UpCloud** | `terraform fmt -check` + `terraform validate` (CI) | n/a | n/a | CI matrix runs all three providers. |
+| **Terraform — Hetzner / Vultr** | `terraform fmt -check` + `terraform validate` (CI) | n/a | n/a | Provider roots mirror the inventory-facing UpCloud outputs. |
 | **cloud-init template** | `cloud-init schema --config-file` (CI) | rendered via Terraform `console` | n/a | |
 | **Ansible playbooks** | `ansible-lint` + `ansible-playbook --syntax-check` (CI) | n/a | n/a | site.yml asserts VPN_SECRETS_FILE is set; CI passes the example schema as a stub. |
 | **Ansible role: baseline** | ansible-lint | render check | **molecule** (debian13 + ubuntu24.04) | tests sshd hardening, sysctl, timesync, IPv4 forwarding gating. |
