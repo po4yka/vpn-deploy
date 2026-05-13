@@ -63,40 +63,32 @@
         cmd: python3 -c "import json,sys; json.load(open('/etc/xray/config.json'))"
       changed_when: false
 
-    - name: Read config.json for REALITY shortId assertions
-      ansible.builtin.slurp:
-        src: /etc/xray/config.json
-      register: xray_config_raw
-
-    - name: Parse config.json
-      ansible.builtin.set_fact:
-        xray_config: "{{ xray_config_raw.content | b64decode | from_json }}"
-
-    - name: Extract REALITY shortIds from config (defensive against null + placeholders)
-      ansible.builtin.set_fact:
-        reality_short_ids: >-
-          {{
-            (xray_config.inbounds | default([]))
-            | selectattr('streamSettings', 'mapping')
-            | map(attribute='streamSettings')
-            | selectattr('realitySettings', 'mapping')
-            | map(attribute='realitySettings')
-            | map(attribute='shortIds', default=[])
-            | flatten
-            | select('string')
-            | reject('search', 'REPLACE_')
-            | list
-          }}
+    # Use jq directly instead of slurp+from_json+selectattr — far less
+    # fragile across Jinja/Ansible versions and the output is auditable
+    # in the molecule log. The jq filter walks the inbounds, picks
+    # realitySettings.shortIds where present, drops REPLACE_* placeholders,
+    # and emits each shortId on its own line.
+    - name: Extract REALITY shortIds via jq (placeholders filtered)
+      ansible.builtin.command:
+        cmd: >-
+          jq -r
+          '[.inbounds[]?.streamSettings?.realitySettings?.shortIds[]?
+            | select(type == "string")
+            | select(test("REPLACE_") | not)]
+           | .[]'
+          /etc/xray/config.json
+      register: xray_short_ids
+      changed_when: false
 
     - name: All real REALITY shortIds have even length (odd length breaks sing-box <= 1.10)
-      # `mapping` (not `defined`) skips null/None streamSettings; `search`
-      # is more lenient than `match` across Jinja versions. Placeholders
-      # like REPLACE_WITH_8HEX are filtered out so the assertion exercises
-      # only real shortIds. Empty list → vacuously satisfied (only happens
-      # under stub fixtures); populated list → every entry must be even.
+      # Stub fixtures render REPLACE_WITH_8HEX placeholders that the jq
+      # filter above drops; the assertion then has nothing to check. On
+      # production deploys with real secrets, every shortId must have
+      # an even hex length.
       ansible.builtin.assert:
         that:
-          - (reality_short_ids | length) == 0 or
-            (reality_short_ids | map('length') | select('odd') | list | length) == 0
+          - (xray_short_ids.stdout_lines | length) == 0 or
+            (xray_short_ids.stdout_lines | map('length') | select('odd') | list | length) == 0
         fail_msg: >-
-          REALITY shortIds must all have even length. Found: {{ reality_short_ids }}
+          REALITY shortIds must all have even length. Found odd-length:
+          {{ xray_short_ids.stdout_lines | select('length') | rejectattr('__len__', 'even') | list }}
