@@ -1,0 +1,40 @@
+#!/bin/sh
+set -eu
+
+STUB_LOG="${STUB_LOG:-/dev/null}"
+printf 'STUB: terraform %s\n' "$*" >> "${STUB_LOG}"
+
+case "${1:-}" in
+  output)
+    shift
+    if [ "${1:-}" = "-json" ]; then
+      REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+      cat "${REPO_ROOT}/tests/fixtures/tf-output-sample.json"
+      exit 0
+    fi
+    if [ "${1:-}" = "-raw" ]; then
+      key="${2:-}"
+      REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+      python3 -c "
+import json, sys
+d = json.load(open('${REPO_ROOT}/tests/fixtures/tf-output-sample.json'))
+k = '${key}'
+if k in d:
+    print(d[k]['value'], end='')
+else:
+    sys.exit(1)
+"
+      exit 0
+    fi
+    printf 'STUB: terraform output %s\n' "$*" >&2
+    exit 0
+    ;;
+  init|plan|apply|destroy|validate|fmt|console)
+    printf 'STUB: terraform %s\n' "$*" >&2
+    exit 0
+    ;;
+  *)
+    printf 'STUB: terraform %s\n' "$*" >&2
+    exit 0
+    ;;
+esac

@@ -1,0 +1,12 @@
+# Test fixture for scripts/fleet-rotate.sh --plan
+# All provider/env names are placeholders. Values match the script's
+# expected YAML shape (id, min_active, rotations[].current/new_env/new_zone).
+id: 2026-05-test-rotation
+min_active: 1
+rotations:
+  - current: upcloud:prod
+    new_env: prod-2026-05
+    new_zone: nl-ams1
+  - current: hetzner:prod
+    new_env: prod-2026-05
+    new_zone: hel1

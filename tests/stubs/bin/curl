@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+STUB_LOG="${STUB_LOG:-/dev/null}"
+printf 'STUB: curl %s\n' "$*" >> "${STUB_LOG}"
+
+url=""
+for arg in "$@"; do
+  case "$arg" in
+    -s|-S|-L|-f|--silent|--fail|--location) ;;
+    http*) url="$arg" ;;
+  esac
+done
+
+case "$url" in
+  *api.github.com/repos/*/releases/latest*)
+    printf '{"tag_name":"vpnd-v0.1.0"}\n'
+    exit 0
+    ;;
+  *ifconfig.me*|*ipv4.icanhazip.com*)
+    printf '198.51.100.10\n'
+    exit 0
+    ;;
+  *)
+    printf 'STUB: curl %s\n' "$*" >&2
+    exit 0
+    ;;
+esac

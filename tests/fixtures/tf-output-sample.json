@@ -1,0 +1,27 @@
+{
+  "server_ipv4": {
+    "sensitive": false,
+    "type": "string",
+    "value": "198.51.100.10"
+  },
+  "server_ipv6": {
+    "sensitive": false,
+    "type": "string",
+    "value": "2001:db8::1"
+  },
+  "admin_user": {
+    "sensitive": false,
+    "type": "string",
+    "value": "deploy"
+  },
+  "server_hostname": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpn-test.example.com"
+  },
+  "honeypot_ipv4": {
+    "sensitive": false,
+    "type": "string",
+    "value": ""
+  }
+}

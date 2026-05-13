@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+STUB_LOG="${STUB_LOG:-/dev/null}"
+printf 'STUB: hcloud %s\n' "$*" >&2
+printf 'STUB: hcloud %s\n' "$*" >> "${STUB_LOG}"
+exit 0

@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+STUB_LOG="${STUB_LOG:-/dev/null}"
+printf 'STUB: upcloud %s\n' "$*" >&2
+printf 'STUB: upcloud %s\n' "$*" >> "${STUB_LOG}"
+exit 0

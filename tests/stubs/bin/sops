@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+STUB_LOG="${STUB_LOG:-/dev/null}"
+printf 'STUB: sops %s\n' "$*" >> "${STUB_LOG}"
+
+REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+FIXTURE="${REPO_ROOT}/tests/fixtures/secrets-sample.yml"
+
+decrypt=0
+encrypt=0
+target=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --decrypt|-d) decrypt=1 ;;
+    --encrypt|-e) encrypt=1 ;;
+    -*) ;;
+    *) target="$arg" ;;
+  esac
+done
+
+if [ "$decrypt" -eq 1 ]; then
+  if [ -n "$target" ] && [ "$target" != "-" ]; then
+    cp "${FIXTURE}" "${target}"
+  else
+    cat "${FIXTURE}"
+  fi
+  exit 0
+fi
+
+if [ "$encrypt" -eq 1 ]; then
+  printf 'STUB: sops encrypt -- no-op in test harness\n' >&2
+  exit 0
+fi
+
+printf 'STUB: sops %s\n' "$*" >&2
+exit 0

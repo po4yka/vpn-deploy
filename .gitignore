@@ -33,6 +33,8 @@ secrets/*
 *.key
 *.pem
 *.age
+# Exception: test-only age identity (allowlisted in .gitleaks.toml)
+!tests/fixtures/age-test.key
 
 # Decrypted SOPS files
 *.sops.yaml.dec
