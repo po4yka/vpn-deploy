@@ -69,11 +69,14 @@ fn load_cache(path: &std::path::Path, now: u64) -> Option<Cache> {
 }
 
 fn fetch_latest_tag() -> Result<String> {
-    let resp = ureq::get(GITHUB_API_URL)
-        .set("User-Agent", &format!("vpnd/{}", env!("CARGO_PKG_VERSION")))
+    let mut resp = ureq::get(GITHUB_API_URL)
+        .header("User-Agent", format!("vpnd/{}", env!("CARGO_PKG_VERSION")))
         .call()
         .context("GitHub releases API request failed")?;
-    let release: GhRelease = resp.into_json().context("parse GitHub release JSON")?;
+    let release: GhRelease = resp
+        .body_mut()
+        .read_json()
+        .context("parse GitHub release JSON")?;
     Ok(release.tag_name)
 }
 
