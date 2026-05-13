@@ -23,7 +23,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         setup-yubikey check-killswitch install-operator-crons \
         remove-operator-crons issue-sub-token sub-reads \
         test-unit snapshot-check snapshot-update validate-secrets \
-        tf-test ci-fast
+        tf-test ci-fast vpnd-test vpnd-clippy
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -407,3 +407,9 @@ scan-targets:
 blue-green:
 	@test -n "$(GREEN_ENV)" || { echo "GREEN_ENV=<name> required (e.g. green, spare2)"; exit 1; }
 	PROVIDER=$(PROVIDER) BLUE_ENV=$(ENV) GREEN_ENV=$(GREEN_ENV) ./scripts/blue-green.sh
+
+vpnd-test:
+	cd vpnd && cargo test --release
+
+vpnd-clippy:
+	cd vpnd && cargo clippy --release --all-targets -- -D warnings

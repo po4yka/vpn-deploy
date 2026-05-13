@@ -43,13 +43,46 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 | **Pinned-binary reproducibility** | **`.github/workflows/reproducible-build.yml`** (CI) | go build + sha256 compare | n/a | Three jobs: xray (from-source rebuild → soft-warn on bytewise drift), hysteria (hard-fail on release-asset sha256 mismatch), RealiTLScanner (same). |
 | **Real-VPS end-to-end** | **`.github/workflows/real-vps-deploy.yml`** (workflow_dispatch / `ci-real-deploy` label) | provision → site.yml → verify → destroy | n/a | Approximates production deploy as closely as Actions allows. Ephemeral UpCloud VPS per run. Does not currently run smoke-test. See `docs/CI-REAL-DEPLOY.md`. |
 | **Kill-switch validation** | **`scripts/check-singbox-killswitch.py`** (operator-driven) | static JSON analysis | n/a | Verifies auto_route + strict_route, route.final ≠ direct, DNS detour ≠ direct, no IPv6-only outbounds. |
+| **vpnd Rust crate (110 tests)** | `cargo clippy --release --all-targets -- -D warnings` (CI) | n/a | `cargo test --release` (CI, blocking) | Covers runner builders (process, make, ansible, terraform, sops), config discovery, secrets parsing, registry round-trip, QR encode, update-cache, completions snapshot, ai-docs emit, host CRUD, doctor bundle, share bundle. |
+| **Python unit tests (118 tests, 1 skip)** | pytest (CI) | n/a | n/a | Covers orchestrator dry-runs (blue-green, fleet-rotate, restore), age-recovery round-trip, emit-singbox, SOPS round-trip, render-inventory, relay/fallback, subscription token revocation lifecycle, tspu-canary, scan-reality-targets, singbox kill-switch. |
+| **Jinja2 snapshot diff (27 templates)** | `scripts/render-snapshots.py` | golden-file diff | n/a | Fails on any unintended render change. Run `make snapshot-update` after intentional template edits. |
+
+## Test fixtures and stubs
+
+All shared test inputs live under `tests/fixtures/` and stub binaries under
+`tests/stubs/bin/`.
+
+### `tests/fixtures/`
+
+| File | Purpose |
+|---|---|
+| `secrets-sample.yml` | SOPS-decrypted-shaped YAML with placeholder values; loaded by pytest and Rust integration tests via `include_str!` |
+| `secrets-sample.sops.yaml` | Same content age-encrypted to a test-only key (`tests/fixtures/age-test.key`) |
+| `tf-output-sample.json` | `terraform output -json` shape; consumed by render-inventory tests |
+| `inventory-sample.ini` | Expected output of `render-inventory.sh` for the sample TF output |
+| `fleet-plan-sample.yaml` | Input shape for `fleet-rotate.sh --dry-run` tests |
+| `age-recovery-shares/` | 5 Shamir shares (3-of-5 threshold) for age-recovery round-trip tests |
+| `singbox-killswitch-valid.json` | Valid sing-box bundle for kill-switch positive-case test |
+
+### `tests/stubs/bin/`
+
+POSIX shell scripts (shellcheck-clean, ≤30 lines each) that replace real
+binaries during pytest dry-run tests. Tests prepend `tests/stubs/bin` to
+`PATH`; each stub echoes its invocation to `$STUB_LOG` so tests can assert
+exact argument vectors without network or filesystem side-effects.
+
+Stubs provided: `terraform`, `ansible-playbook`, `sops`, `curl`, `gh`,
+`upcloud`, `hcloud`, `vultr`.
+
+See `tests/stubs/README.md` for the discipline contract and how to add a
+new stub.
 
 ## Test phases mapped to operator workflow
 
 | Operator step | Tests that protect it |
 |---|---|
 | `git commit` (local) | pre-commit hooks: gitleaks, terraform fmt, ansible-lint, yamllint, **shellcheck**, **secrets-coverage**, **templates-render**, **placeholder-scan** |
-| `git push` (PR) | CI matrix: terraform fmt+validate (3 providers), terraform test (3 providers), cloud-init schema, ansible-lint + syntax, required molecule scenarios for baseline/firewall/xray/hysteria/nginx-xhttp/watchdog/monitoring/backup/subscription-host plus watchdog failure, shellcheck, secrets-coverage, templates-render, yamllint, gitleaks, unit tests, snapshot diff, secrets schema; reproducible-build covers xray + hysteria + RealiTLScanner sha256. |
+| `git push` (PR) | CI matrix: terraform fmt+validate (3 providers), terraform test (3 providers), cloud-init schema, ansible-lint + syntax, required molecule scenarios for baseline/firewall/xray/hysteria/nginx-xhttp/watchdog/monitoring/backup/subscription-host plus watchdog failure, shellcheck, secrets-coverage, templates-render, yamllint, gitleaks, unit tests (118 pytest + 110 Rust), snapshot diff, secrets schema; reproducible-build covers xray + hysteria + RealiTLScanner sha256. |
 | PR labeled `ci-real-deploy` | **real-vps-deploy** workflow: provisions an ephemeral UpCloud VPS, runs site.yml + verify, destroys — closest approximation to production in CI. See `docs/CI-REAL-DEPLOY.md`. |
 | `make validate` (operator) | terraform fmt + validate + gitleaks + ansible-lint + ansible syntax-check |
 | `make validate-target` | live probe of REALITY target (TLS / H2 / SAN / uTLS / ASN / template OPSEC) |
@@ -107,12 +140,23 @@ configure it per-ecosystem in repo Settings.
 - **Live external network reachability of upstream geodata / Xray / Hysteria
   binaries.** Test would couple the build to upstream availability. We
   pin-and-checksum at deploy; CI doesn't re-validate every release.
-- **AmneziaWG userspace build inside Docker.** Requires kernel TUN; would
-  need a privileged runner. Render check covers template correctness;
+- **AmneziaWG TUN converge inside Docker.** Requires kernel TUN device +
+  golang build of amneziawg-go. Render check covers template correctness;
   `awg show` is part of `verify.yml` against a real VPS.
 - **NaiveProxy xcaddy build.** Pulls Go modules; flaky in CI. Render check
-  + bash-syntax cover the artifact shape; the build itself runs only on
-  the target VPS during deploy.
+  + bash-syntax cover the artifact shape; the build runs only on the target
+  VPS during deploy.
+- **Cloudflare WARP registration.** Requires a registerable WARP endpoint not
+  available in CI containers. Structure validation only via molecule
+  syntax-only scenario.
+- **RealiTLScanner full-scan integration.** Binary required at runtime;
+  coupling CI to upstream build would introduce flakiness. Shellcheck covers
+  the wrapper script shape.
+- **`scripts/restore.sh` real mode.** The `--dry-run` mode is covered by
+  `tests/unit/test_restore_dryrun.py`. The live restore path (decrypts
+  SOPS secrets, re-provisions real infrastructure) is only safe to exercise
+  against a throwaway VPS; a maintainer TODO covers adding it to the
+  `ci-real-deploy` label workflow.
 - **End-to-end traffic against geographic locations** (RU, EU, US). Would
   require live infrastructure with the right BGP. This is what
   `make burn-check` (operator-side cron) covers post-deploy.
