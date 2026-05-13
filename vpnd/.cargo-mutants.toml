@@ -1,0 +1,20 @@
+# cargo-mutants configuration for vpnd
+# See: https://mutants.rs/configuration.html
+
+# 5-minute timeout per mutant (recommended for the first month; tune from data)
+timeout_multiplier = 5.0
+
+# Focus mutation testing on the highest-value surfaces
+examine_globs = [
+  "src/runner/**",
+  "src/commands/doctor.rs",
+  "src/pages/qr.rs",
+  "src/secrets.rs",
+]
+
+# Exclude paths that are integration-only or not meaningful to mutate
+exclude_globs = [
+  "src/main.rs",
+  "tests/**",
+  "build.rs",
+]

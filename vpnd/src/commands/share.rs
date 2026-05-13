@@ -97,7 +97,7 @@ fn per_platform_apps() -> Vec<recipient::AppCard> {
     ]
 }
 
-fn urlencode(s: &str) -> String {
+pub fn urlencode(s: &str) -> String {
     use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
     utf8_percent_encode(s, NON_ALPHANUMERIC).to_string()
 }

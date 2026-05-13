@@ -52,6 +52,7 @@ clap_mangen = "0.2"
 [dev-dependencies]
 insta = "1"
 tempfile = "3"
+proptest = "1"
 
 [profile.release]
 lto = "thin"

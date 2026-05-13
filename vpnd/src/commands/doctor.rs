@@ -152,7 +152,7 @@ async fn run_capture(program: &str, args: &[&str]) -> Vec<u8> {
 }
 
 /// Replace lines containing /tmp/vpn-*.secrets.yaml with a redaction notice.
-fn redact_secrets(s: String) -> String {
+pub fn redact_secrets(s: String) -> String {
     s.lines()
         .map(|line| {
             if line.contains("/tmp/vpn-") && line.contains(".secrets.yaml") {

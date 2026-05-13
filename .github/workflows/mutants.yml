@@ -1,0 +1,122 @@
+---
+name: cargo-mutants weekly
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  mutants:
+    name: mutation testing
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
+        with:
+          workspaces: vpnd
+
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --locked
+
+      - name: Run mutation tests
+        id: mutants
+        working-directory: vpnd
+        # Full pass over examine_globs defined in .cargo-mutants.toml.
+        # --no-shuffle keeps output deterministic for diffing week-over-week.
+        # continue-on-error: surviving mutants are expected initially; they do
+        # NOT block anything — the tracking issue is the action signal.
+        continue-on-error: true
+        run: |
+          cargo mutants --no-shuffle 2>&1 | tee /tmp/mutants-output.txt
+          # Capture exit code: 0 = clean, 2 = surviving mutants found
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Report surviving mutants to tracking issue
+        if: steps.mutants.outputs.exit_code == '2'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('/tmp/mutants-output.txt', 'utf8');
+            const label = 'automation:mutation-testing';
+            const weekOf = new Date().toISOString().slice(0, 10);
+            const title = `Surviving mutants — week of ${weekOf}`;
+
+            // Ensure the label exists
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+              });
+            } catch (e) {
+              if (e.status === 404) {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label,
+                  color: 'e4e669',
+                  description: 'Tracks cargo-mutants surviving mutant reports',
+                });
+              }
+            }
+
+            // Find an open tracking issue for this label
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: label,
+              state: 'open',
+              per_page: 1,
+            });
+
+            const body = [
+              `## ${title}`,
+              '',
+              'Workflow run: ' + context.serverUrl + '/' +
+                context.repo.owner + '/' + context.repo.repo +
+                '/actions/runs/' + context.runId,
+              '',
+              '```',
+              output.slice(0, 60000),
+              '```',
+              '',
+              'Each surviving mutant either needs a new test in the next PR',
+              'or a `// MUTANT-OK: <reason>` comment in the source.',
+            ].join('\n');
+
+            if (issues.data.length > 0) {
+              // Append a comment to the existing tracking issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issues.data[0].number,
+                body: body,
+              });
+              core.info(`Commented on issue #${issues.data[0].number}`);
+            } else {
+              // Open a fresh tracking issue
+              const created = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: [label],
+              });
+              core.info(`Opened issue #${created.data.number}`);
+            }
