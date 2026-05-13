@@ -6,8 +6,20 @@
 #   PREFIX=/usr/local sh scripts/install-vpnd.sh
 #
 # Environment variables:
-#   PREFIX      Installation prefix (default: /usr/local); binary goes to $PREFIX/bin/vpnd
-#   ALLOW_ROOT  Set to 1 to permit running as root
+#   PREFIX                 Installation prefix (default: /usr/local); binary goes to $PREFIX/bin/vpnd
+#   ALLOW_ROOT             Set to 1 to permit running as root
+#   VPND_SKIP_ATTESTATION  Set to any non-empty value to skip gh attestation verify
+#
+# Attestation verification:
+#   After the SHA256 checksum passes, the script attempts to verify the binary's
+#   SLSA build provenance via `gh attestation verify`. This requires the GitHub
+#   CLI (gh) to be installed and authenticated. If gh is not on PATH the check
+#   is skipped with a warning. Set VPND_SKIP_ATTESTATION=1 to skip explicitly.
+#
+#   To verify manually:
+#     gh attestation verify <path-to-vpnd-binary> \
+#       --owner po4yka \
+#       --signer-workflow .github/workflows/release-vpnd.yml
 #
 # shellcheck shell=sh
 
@@ -106,6 +118,30 @@ if [ "${actual}" != "${expected}" ]; then
   echo "  expected: ${expected}" >&2
   echo "  actual:   ${actual}" >&2
   exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Verify SLSA build provenance attestation (optional)
+# ---------------------------------------------------------------------------
+if [ -z "${VPND_SKIP_ATTESTATION:-}" ]; then
+  if command -v gh > /dev/null 2>&1; then
+    echo "Verifying build provenance attestation ..."
+    if ! gh attestation verify "${tmpdir}/vpnd" \
+        --owner po4yka \
+        --signer-workflow .github/workflows/release-vpnd.yml; then
+      echo "error: attestation verification failed." >&2
+      echo "  The binary may not have been built by the official release workflow." >&2
+      echo "  Set VPND_SKIP_ATTESTATION=1 to bypass (not recommended)." >&2
+      exit 1
+    fi
+    echo "Attestation verified."
+  else
+    echo "warning: 'gh' not found on PATH; skipping attestation verification." >&2
+    echo "  To verify manually after install:" >&2
+    echo "    gh attestation verify <path-to-vpnd> \\" >&2
+    echo "      --owner po4yka \\" >&2
+    echo "      --signer-workflow .github/workflows/release-vpnd.yml" >&2
+  fi
 fi
 
 # ---------------------------------------------------------------------------

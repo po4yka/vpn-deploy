@@ -1,0 +1,67 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true
+  },
+  "schedule": ["on weekend"],
+  "packageRules": [
+    {
+      "description": "Group all Terraform provider updates into one weekly PR",
+      "matchManagers": ["terraform"],
+      "matchDepTypes": ["provider"],
+      "groupName": "terraform providers",
+      "schedule": ["on weekend"]
+    },
+    {
+      "description": "Group all Rust crate updates into one weekly PR",
+      "matchManagers": ["cargo"],
+      "groupName": "rust crates",
+      "schedule": ["on weekend"]
+    },
+    {
+      "description": "One PR per GitHub Actions update with digest pinning; preserve version comment",
+      "matchManagers": ["github-actions"],
+      "separateMinorPatch": false,
+      "addLabels": ["dependencies", "github-actions"]
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Xray version pin in Ansible role defaults",
+      "customType": "regex",
+      "fileMatch": ["^ansible/roles/xray/defaults/main\\.yml$"],
+      "matchStrings": [
+        "xray_version:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?"
+      ],
+      "depNameTemplate": "XTLS/Xray-core",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    },
+    {
+      "description": "Realm version pin in Ansible role defaults",
+      "customType": "regex",
+      "fileMatch": ["^ansible/roles/realm/defaults/main\\.yml$"],
+      "matchStrings": [
+        "realm_version:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?"
+      ],
+      "depNameTemplate": "zhboner/realm",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    },
+    {
+      "description": "AmneziaWG version pin in Ansible role defaults",
+      "customType": "regex",
+      "fileMatch": ["^ansible/roles/amneziawg/defaults/main\\.yml$"],
+      "matchStrings": [
+        "amneziawg_version:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?"
+      ],
+      "depNameTemplate": "amnezia-vpn/amnezia-client",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver-coerced"
+    }
+  ]
+}

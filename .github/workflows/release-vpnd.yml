@@ -11,83 +11,94 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: build (${{ matrix.target }})
-    runs-on: ${{ matrix.os }}
+  build-x86_64-linux:
+    name: build (x86_64-unknown-linux-gnu)
+    uses: ./.github/workflows/_rust.yml
+    with:
+      target: x86_64-unknown-linux-gnu
+      cargo-command: build --release
+      cross: false
+      upload-binary: true
+
+  build-aarch64-linux:
+    name: build (aarch64-unknown-linux-gnu)
+    uses: ./.github/workflows/_rust.yml
+    with:
+      target: aarch64-unknown-linux-gnu
+      cargo-command: build --release
+      cross: true
+      upload-binary: true
+
+  build-x86_64-macos:
+    name: build (x86_64-apple-darwin)
+    uses: ./.github/workflows/_rust.yml
+    with:
+      target: x86_64-apple-darwin
+      cargo-command: build --release
+      cross: false
+      upload-binary: true
+
+  build-aarch64-macos:
+    name: build (aarch64-apple-darwin)
+    uses: ./.github/workflows/_rust.yml
+    with:
+      target: aarch64-apple-darwin
+      cargo-command: build --release
+      cross: false
+      upload-binary: true
+
+  attest:
+    name: attest (${{ matrix.target }})
+    needs:
+      - build-x86_64-linux
+      - build-aarch64-linux
+      - build-x86_64-macos
+      - build-aarch64-macos
+    runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-24.04
-            cross: false
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04
-            cross: true
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            cross: false
-          - target: aarch64-apple-darwin
-            os: macos-latest
-            cross: false
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
-        with:
-          persist-credentials: false
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable
-        with:
-          toolchain: stable
-          targets: ${{ matrix.target }}
-
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
-        with:
-          workspaces: vpnd
-          key: ${{ matrix.target }}
-
-      - name: Install cross (Linux aarch64 only)
-        if: ${{ matrix.cross }}
-        working-directory: vpnd
-        run: cargo install cross --locked
-
-      - name: Build (native)
-        if: ${{ !matrix.cross }}
-        working-directory: vpnd
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Build (cross — aarch64-unknown-linux-gnu)
-        if: ${{ matrix.cross }}
-        working-directory: vpnd
-        run: cross build --release --target ${{ matrix.target }}
-
-      - name: Rename binary with target suffix
-        shell: bash
-        run: |
-          src="vpnd/target/${{ matrix.target }}/release/vpnd"
-          dst="vpnd-${{ matrix.target }}"
-          cp "${src}" "${dst}"
-
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+      - name: Download binary artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
           name: vpnd-${{ matrix.target }}
-          path: vpnd-${{ matrix.target }}
+          path: dist
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be  # v2.4.0
+        with:
+          subject-path: dist/vpnd-${{ matrix.target }}
+
+      - name: Re-upload attested artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: attested-vpnd-${{ matrix.target }}
+          path: dist/vpnd-${{ matrix.target }}
           retention-days: 1
 
   release:
     name: attach release assets
-    needs: build
+    needs: attest
     runs-on: ubuntu-24.04
     permissions:
       contents: write
 
     steps:
-      - name: Download all binary artifacts
+      - name: Download all attested binary artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4
         with:
+          pattern: attested-vpnd-*
           path: dist
           merge-multiple: true
 

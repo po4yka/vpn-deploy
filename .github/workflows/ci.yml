@@ -221,6 +221,16 @@ jobs:
       - name: pytest tests/unit/
         run: python3 -m pytest tests/unit/ -v
 
+  bats-test:
+    name: bats shell tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - name: Install bats
+        run: sudo apt-get update && sudo apt-get install -y bats ssss
+      - name: bats tests/bats/
+        run: bats tests/bats/
+
   snapshot:
     name: jinja snapshot diff
     runs-on: ubuntu-24.04
@@ -268,28 +278,17 @@ jobs:
 
   vpnd-test:
     name: vpnd cargo test
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+    uses: ./.github/workflows/_rust.yml
+    with:
+      target: x86_64-unknown-linux-gnu
+      cargo-command: test --release
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable
-        with:
-          toolchain: stable
-          components: clippy
-
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
-        with:
-          workspaces: vpnd
-
-      - name: cargo test --release
-        working-directory: vpnd
-        run: cargo test --release
-
-      - name: cargo clippy --release
-        working-directory: vpnd
-        run: cargo clippy --release --all-targets -- -D warnings
+  vpnd-clippy:
+    name: vpnd cargo clippy
+    uses: ./.github/workflows/_rust.yml
+    with:
+      target: x86_64-unknown-linux-gnu
+      cargo-command: clippy --release --all-targets -- -D warnings
 
   molecule-failure-scenarios:
     # Non-default Molecule scenarios that exercise red-path / failure

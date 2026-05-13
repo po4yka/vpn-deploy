@@ -1,0 +1,82 @@
+---
+name: _rust (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: "Rust target triple (e.g. x86_64-unknown-linux-gnu)"
+        type: string
+        required: true
+      cargo-command:
+        description: "Cargo subcommand + args to run (e.g. 'test --release')"
+        type: string
+        default: "test --release"
+      cache-key-suffix:
+        description: "Optional suffix appended to the rust-cache key"
+        type: string
+        default: ""
+      cross:
+        description: "Use cross instead of cargo for the build step"
+        type: boolean
+        default: false
+      upload-binary:
+        description: "Upload the built binary as a workflow artifact (build --release only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: rust (${{ inputs.target }})
+    runs-on: ${{ contains(inputs.target, 'apple') && 'macos-latest' || 'ubuntu-24.04' }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          persist-credentials: false
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9  # stable
+        with:
+          toolchain: stable
+          targets: ${{ inputs.target }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32  # v2
+        with:
+          workspaces: vpnd
+          key: ${{ inputs.target }}${{ inputs.cache-key-suffix != '' && format('-{0}', inputs.cache-key-suffix) || '' }}
+
+      - name: Install cross (cross-compilation only)
+        if: ${{ inputs.cross }}
+        working-directory: vpnd
+        run: cargo install cross --locked
+
+      - name: Run cargo ${{ inputs.cargo-command }} (native)
+        if: ${{ !inputs.cross }}
+        working-directory: vpnd
+        run: cargo ${{ inputs.cargo-command }} --target ${{ inputs.target }}
+
+      - name: Run cross ${{ inputs.cargo-command }} (cross)
+        if: ${{ inputs.cross }}
+        working-directory: vpnd
+        run: cross ${{ inputs.cargo-command }} --target ${{ inputs.target }}
+
+      - name: Rename binary with target suffix
+        if: ${{ inputs.upload-binary }}
+        shell: bash
+        run: |
+          src="vpnd/target/${{ inputs.target }}/release/vpnd"
+          dst="vpnd-${{ inputs.target }}"
+          cp "${src}" "${dst}"
+
+      - name: Upload binary artifact
+        if: ${{ inputs.upload-binary }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: vpnd-${{ inputs.target }}
+          path: vpnd-${{ inputs.target }}
+          retention-days: 1
