@@ -68,8 +68,9 @@ Thumbs.db
 # pytest
 .pytest_cache/
 
-# Claude Code local state
+# Claude Code / oh-my-claudecode local state
 .claude/
+.omc/
 
 # SBOM artifacts (reproducible from secrets schema via make emit-sbom)
 sbom/*.json
