@@ -1,0 +1,3 @@
+# docs/demo — recipient page preview
+
+`index.html` is a static rendering of the recipient page that `vpnd share <client>` generates for VPN clients: it shows the sing-box deep-link, a QR code placeholder, app-store links, and troubleshooting steps, all with placeholder values (`vpn.example.com`, client `phone`, env `demo`, provider `upcloud`). The source of truth for layout and copy is [`vpnd/templates/recipient.html`](../../vpnd/templates/recipient.html), rendered at runtime by the `pages::recipient` Askama template in the `vpnd` crate; real recipient pages are served from `/share/<token>/` on the deployed subscription-host (see `ansible/roles/subscription-host/`).

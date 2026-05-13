@@ -126,3 +126,10 @@
     enabled: true
     state: started
     daemon_reload: true
+
+# ---------------------------------------------------------------------------
+# Share-bundle ingest — operator-uploaded recipient pages at /share/<token>/
+# ---------------------------------------------------------------------------
+
+- name: Ingest share bundles
+  ansible.builtin.import_tasks: share-bundles.yml

@@ -1,0 +1,44 @@
+---
+# Ingest operator-uploaded share bundles into the nginx static tree.
+# Each bundle contains the rendered recipient page (index.html, qr.png, …)
+# produced by `vpnd share <client>`. nginx serves them at
+# /share/<token>/ via the subscription vhost.
+#
+# Activated only when vpn.share_bundles is populated in group_vars.
+
+- name: Ensure share root directory
+  ansible.builtin.file:
+    path: /var/www/subscription-host/share
+    state: directory
+    owner: root
+    group: www-data
+    mode: "0755"
+  when: vpn.share_bundles | default([]) | length > 0
+
+- name: Ensure per-token share directories
+  ansible.builtin.file:
+    path: "/var/www/subscription-host/share/{{ item.token }}"
+    state: directory
+    owner: root
+    group: www-data
+    mode: "0755"
+  loop: "{{ vpn.share_bundles | default([]) }}"
+  loop_control:
+    label: "{{ item.client }}"
+  when: vpn.share_bundles | default([]) | length > 0
+
+- name: Sync share bundle contents
+  ansible.posix.synchronize:
+    src: "{{ item.local_path }}/"
+    dest: "/var/www/subscription-host/share/{{ item.token }}/"
+    delete: true
+    recursive: true
+    rsync_opts:
+      - "--chmod=D755,F644"
+      - "--chown=root:www-data"
+  delegate_to: "{{ inventory_hostname }}"
+  loop: "{{ vpn.share_bundles | default([]) }}"
+  loop_control:
+    label: "{{ item.client }}"
+  when: vpn.share_bundles | default([]) | length > 0
+  notify: Reload nginx

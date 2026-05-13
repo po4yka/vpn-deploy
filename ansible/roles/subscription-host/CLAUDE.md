@@ -19,6 +19,10 @@ Decryptable only with the audit-log key. See `scripts/sub-reads.sh`.
   are one-shot (consumed on read); subscription tokens persist with optional
   TTL.
 - **Tokens are hashed-at-rest** — `scrypt` with a per-host salt.
+- **Share-bundle ingest is zero-trust on nginx** — `tasks/share-bundles.yml`
+  rsync's operator-built bundles to `/var/www/subscription-host/share/<token>/`
+  with `access_log off` on the location; the raw token never appears in any
+  nginx log line.
 
 ## Pitfalls
 

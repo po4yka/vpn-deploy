@@ -65,6 +65,23 @@ server {
     }
 {% endif %}
 
+{% if vpn.share_bundles | default([]) | length > 0 %}
+    # Static recipient pages produced by `vpnd share <client>`.
+    # Served from the local filesystem; no proxy, no rate-limit (static HTML).
+    # Raw token MUST NOT appear in logs — access_log is disabled here for the
+    # same reason it is disabled on /sub/. The vpnd audit trail is maintained
+    # out-of-band; nginx never sees the plaintext token in a logged field.
+    location ~ "^/share/(?<vpn_share_token>[A-Za-z0-9_-]{16,64})(/.*)?$" {
+        alias /var/www/subscription-host/share/$vpn_share_token/;
+        try_files $uri $uri/index.html =404;
+
+        add_header Cache-Control "no-store"      always;
+        add_header Referrer-Policy "no-referrer" always;
+
+        access_log off;
+    }
+{% endif %}
+
     # Reject everything else.
     location / {
         return 404;
