@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod commands;
 pub mod config;
+pub mod docs_bundle;
 pub mod pages;
 pub mod runner;
 pub mod secrets;

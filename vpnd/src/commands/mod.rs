@@ -1,4 +1,5 @@
 pub mod ai_docs;
+pub mod completions;
 pub mod deploy;
 pub mod doctor;
 pub mod fleet;
@@ -7,3 +8,4 @@ pub mod preflight;
 pub mod probe;
 pub mod reconverge;
 pub mod share;
+pub mod update;

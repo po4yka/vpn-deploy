@@ -36,6 +36,17 @@ invocations `vpnd` would run, in order, then exits without running them.
 The intent is for operators to learn (and audit) the underlying Make
 targets without trusting the binary blindly.
 
+## Man page
+
+A man page is generated at build time via `clap_mangen` and written to
+`target/man/vpnd.1`. To install it system-wide:
+
+```bash
+cargo build --release
+sudo install -m 644 target/man/vpnd.1 /usr/local/share/man/man1/vpnd.1
+man vpnd
+```
+
 ## Working directory
 
 `vpnd` expects to be run from the repo root (it discovers `Makefile`,

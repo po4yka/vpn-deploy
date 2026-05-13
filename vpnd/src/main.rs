@@ -8,6 +8,18 @@ async fn main() -> Result<()> {
     init_tracing();
 
     let cli = cli::Cli::parse();
+
+    // Completions and update --explain don't need a repo root.
+    match &cli.command {
+        cli::Command::Completions(args) => return commands::completions::run(args.clone()),
+        cli::Command::Update(args) if args.explain || cli.explain => {
+            println!("# vpnd update would query:");
+            println!("  GET https://api.github.com/repos/po4yka/vpn-deploy/releases/latest");
+            return Ok(());
+        }
+        _ => {}
+    }
+
     let ctx = config::Context::discover(&cli)?;
 
     match cli.command {
@@ -20,6 +32,8 @@ async fn main() -> Result<()> {
         cli::Command::Fleet(args) => commands::fleet::run(&ctx, args).await,
         cli::Command::Host(args) => commands::host::run(&ctx, args).await,
         cli::Command::AiDocs(args) => commands::ai_docs::run(&ctx, args).await,
+        cli::Command::Update(args) => commands::update::run(&ctx, args).await,
+        cli::Command::Completions(args) => commands::completions::run(args),
     }
 }
 

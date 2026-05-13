@@ -56,6 +56,10 @@ pub enum Command {
     Host(HostArgs),
     /// Machine-readable docs endpoints for AI assistants.
     AiDocs(AiDocsArgs),
+    /// Check for a newer vpnd release on GitHub (cached 24 h).
+    Update(UpdateArgs),
+    /// Emit shell completions to stdout.
+    Completions(CompletionsArgs),
 }
 
 #[derive(Args, Debug)]
@@ -110,6 +114,9 @@ pub struct DoctorArgs {
     /// Copy AI prompt to the system clipboard (requires --ai).
     #[arg(long)]
     pub clip: bool,
+    /// Pack a diagnostic gzip-tar bundle at this path (orthogonal to --ai).
+    #[arg(long)]
+    pub bundle: Option<std::path::PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -200,4 +207,17 @@ pub struct AiDocsArgs {
     /// Output directory (default: ./ai-docs/).
     #[arg(long)]
     pub out: Option<std::path::PathBuf>,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct UpdateArgs {
+    /// Print the GitHub API URL that would be queried and exit without fetching.
+    #[arg(long)]
+    pub explain: bool,
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct CompletionsArgs {
+    /// Shell to generate completions for: bash, zsh, fish, powershell.
+    pub shell: String,
 }
