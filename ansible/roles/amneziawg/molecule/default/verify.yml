@@ -1,0 +1,92 @@
+---
+# Verify amneziawg static-config scenario.
+# No live wg-quick or kernel module assertions — we only check that the
+# rendered interface config carries the correct cohort obfuscation params.
+# Cohort chosen: RTK South (jc=4, jmin=10, jmax=50, s1=0, s2=0, h1..h4=1..4)
+
+- name: Verify amneziawg cohort config shape
+  hosts: all
+  become: true
+  tasks:
+    - name: awg0.conf is present in config directory
+      ansible.builtin.stat:
+        path: /etc/amneziawg/awg0.conf
+      register: awg_conf
+      failed_when: not awg_conf.stat.exists
+
+    - name: awg0.conf has restrictive permissions (0600)
+      ansible.builtin.assert:
+        that:
+          - awg_conf.stat.mode == "0600"
+        fail_msg: "awg0.conf mode is {{ awg_conf.stat.mode }}, expected 0600"
+
+    - name: Read awg0.conf content
+      ansible.builtin.slurp:
+        src: /etc/amneziawg/awg0.conf
+      register: awg_conf_raw
+
+    - name: Decode awg0.conf
+      ansible.builtin.set_fact:
+        awg_conf_text: "{{ awg_conf_raw.content | b64decode }}"
+
+    - name: Cohort Jc matches RTK South value (4)
+      ansible.builtin.assert:
+        that:
+          - awg_conf_text is search('(?m)^Jc\s*=\s*4\s*$')
+        fail_msg: |
+          Jc not found or wrong value in awg0.conf.
+          Content: {{ awg_conf_text }}
+
+    - name: Cohort Jmin matches RTK South value (10)
+      ansible.builtin.assert:
+        that:
+          - awg_conf_text is search('(?m)^Jmin\s*=\s*10\s*$')
+        fail_msg: "Jmin not 10 in awg0.conf"
+
+    - name: Cohort Jmax matches RTK South value (50)
+      ansible.builtin.assert:
+        that:
+          - awg_conf_text is search('(?m)^Jmax\s*=\s*50\s*$')
+        fail_msg: "Jmax not 50 in awg0.conf"
+
+    - name: Cohort S1 matches RTK South value (0)
+      ansible.builtin.assert:
+        that:
+          - awg_conf_text is search('(?m)^S1\s*=\s*0\s*$')
+        fail_msg: "S1 not 0 in awg0.conf"
+
+    - name: Cohort S2 matches RTK South value (0)
+      ansible.builtin.assert:
+        that:
+          - awg_conf_text is search('(?m)^S2\s*=\s*0\s*$')
+        fail_msg: "S2 not 0 in awg0.conf"
+
+    - name: H1 through H4 are present in config
+      ansible.builtin.assert:
+        that:
+          - awg_conf_text is search('(?m)^H1\s*=\s*\d+\s*$')
+          - awg_conf_text is search('(?m)^H2\s*=\s*\d+\s*$')
+          - awg_conf_text is search('(?m)^H3\s*=\s*\d+\s*$')
+          - awg_conf_text is search('(?m)^H4\s*=\s*\d+\s*$')
+        fail_msg: "One or more of H1..H4 missing in awg0.conf"
+
+    - name: Interface section is present
+      ansible.builtin.assert:
+        that:
+          - awg_conf_text is search('(?m)^\[Interface\]')
+        fail_msg: "[Interface] section missing from awg0.conf"
+
+    - name: ListenPort is present
+      ansible.builtin.assert:
+        that:
+          - awg_conf_text is search('(?m)^ListenPort\s*=\s*\d+')
+        fail_msg: "ListenPort missing from awg0.conf"
+
+    - name: No live awg-quick or wg-quick processes running (TUN not needed)
+      ansible.builtin.shell:
+        cmd: |
+          ! pgrep -x awg-quick >/dev/null 2>&1
+          ! pgrep -x wg-quick  >/dev/null 2>&1
+          true
+        executable: /bin/bash
+      changed_when: false

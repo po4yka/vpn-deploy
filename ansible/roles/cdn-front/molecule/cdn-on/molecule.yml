@@ -1,4 +1,14 @@
 ---
+# cdn-on scenario — exercises the cdn-front role with vpn.enable_cdn_front: true.
+# This variant asserts:
+#   * real-IP restoration block present in nginx vhost
+#   * AOP cert path consumed (stubbed — cert generation needs network)
+#   * Origin CA cert generation step is idempotent
+#   * Cloudflare prefix refresh cron / nftables sets are in place
+#
+# Distinct from the default scenario which uses enable_cdn_front: true already;
+# this scenario adds AOP cert stubbing and deeper vhost assertions.
+
 dependency:
   name: galaxy
   options:
@@ -8,7 +18,7 @@ driver:
   name: docker
 
 platforms:
-  - name: vpn-naive-debian13
+  - name: vpn-cdn-front-cdn-on-debian13
     image: geerlingguy/docker-debian13-ansible:latest
     pre_build_image: true
     privileged: true
@@ -23,24 +33,20 @@ provisioner:
     ANSIBLE_ROLES_PATH: ../../..
   inventory:
     host_vars:
-      vpn-naive-debian13:
+      vpn-cdn-front-cdn-on-debian13:
         ansible_user: root
-  config_options:
-    defaults:
-      callback_result_format: yaml
 
 verifier:
   name: ansible
 
-# The naive role builds Caddy with xcaddy from source — that needs Go
-# and network. converge.yml stubs out caddy-naive so the role tasks
-# succeed; verify.yml asserts Caddyfile shape without a live build.
 scenario:
+  name: cdn-on
   test_sequence:
     - dependency
     - syntax
     - create
     - prepare
     - converge
+    - idempotence
     - verify
     - destroy

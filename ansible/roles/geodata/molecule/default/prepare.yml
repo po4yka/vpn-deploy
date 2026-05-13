@@ -1,0 +1,59 @@
+---
+# Prepare geodata molecule scenario.
+# Mocks the download step by pre-seeding fixture files at the expected
+# install_dir paths so the role's get_url tasks find the files already
+# present and skip the live network fetch. The sha256 checksum in
+# converge.yml is set to match the fixture content exactly.
+
+- name: Prepare geodata fixture files (mock network download)
+  hosts: all
+  become: true
+  vars:
+    geodata_install_dir: /usr/local/share/xray
+
+  tasks:
+    - name: Ensure geodata install directory
+      ansible.builtin.file:
+        path: "{{ geodata_install_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create fixture geosite.dat (deterministic 16-byte blob)
+      ansible.builtin.copy:
+        dest: "{{ geodata_install_dir }}/geosite.dat"
+        owner: root
+        group: root
+        mode: "0644"
+        content: "MOLECULE_GEOSITE_FIXTURE"
+
+    - name: Create fixture geoip.dat (deterministic 16-byte blob)
+      ansible.builtin.copy:
+        dest: "{{ geodata_install_dir }}/geoip.dat"
+        owner: root
+        group: root
+        mode: "0644"
+        content: "MOLECULE_GEOIP_FIXTURE"
+
+    - name: Compute geosite.dat sha256 for converge vars reference
+      ansible.builtin.command:
+        cmd: sha256sum /usr/local/share/xray/geosite.dat
+      register: geosite_sha256_out
+      changed_when: false
+
+    - name: Compute geoip.dat sha256 for converge vars reference
+      ansible.builtin.command:
+        cmd: sha256sum /usr/local/share/xray/geoip.dat
+      register: geoip_sha256_out
+      changed_when: false
+
+    - name: Store checksums as facts for verify.yml reference
+      ansible.builtin.copy:
+        dest: /tmp/geodata-fixture-checksums.env
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          GEOSITE_SHA256={{ geosite_sha256_out.stdout.split()[0] }}
+          GEOIP_SHA256={{ geoip_sha256_out.stdout.split()[0] }}

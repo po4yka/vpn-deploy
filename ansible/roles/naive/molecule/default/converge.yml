@@ -1,16 +1,65 @@
 ---
-# Available for ad-hoc `molecule converge`; not part of the default
-# CI test_sequence (the role builds Caddy via xcaddy from source).
-- name: Converge naive role (debug only)
+# Converge naive role with a stub caddy-naive binary.
+# The live xcaddy build (needs Go + network) is skipped via the
+# `caddy_naive_bin.stat.exists` guard in tasks/main.yml — we pre-place
+# the binary in pre_tasks so the role sees it and skips the build block.
+- name: Converge naive role
   hosts: all
   become: true
   vars:
+    vpn:
+      enable_naive: true
+      enable_nginx_xhttp: false
     naive_secrets:
       server_name: "vpn.example.com"
       username: "u-test"
       password: "p-test-not-secret"
       probe_resistance_secret: "long-random-string-for-test-only"
-      cert_pem: ""
-      key_pem: ""
+      cert_pem: |
+        -----BEGIN CERTIFICATE-----
+        MIIBpDCCAQmgAwIBAgIUMoleculeStubCert000000001MA0GCSqGSIb3DQEBDQUA
+        MBExDzANBgNVBAMMBnN0dWIgMDAeFw0yNjAxMDEwMDAwMDBaFw0yNzAxMDEwMDAw
+        MDBaMBExDzANBgNVBAMMBnN0dWIgMDAqMAUGAytlcAMhAMoleculeStubKeyData00
+        0000000000000000000000000000000000000000oxIwEDAOBgNVHQ8BAf8EBAMCB4A
+        wDQYJKoZIhvcNAQENBQADgYEAMoleculeStubSignature000000000000000000000
+        0000000000000000000000000000000000000000000000000000000000000000000=
+        -----END CERTIFICATE-----
+      key_pem: |
+        -----BEGIN PRIVATE KEY-----
+        MC4CAQAwBQYDK2VwBCIEIMoleculeStubPrivateKey000000000000000000000000
+        00000000000000000000000=
+        -----END PRIVATE KEY-----
+
+  pre_tasks:
+    - name: Pre-create naive system user (role will also do this idempotently)
+      ansible.builtin.user:
+        name: naive
+        system: true
+        shell: /usr/sbin/nologin
+        home: /var/lib/naive
+        create_home: true
+
+    - name: Ensure naive binary directory
+      ansible.builtin.file:
+        path: /usr/local/bin
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Stub caddy-naive binary (skips the live xcaddy build)
+      ansible.builtin.copy:
+        dest: /usr/local/bin/caddy-naive
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          # Molecule stub for caddy-naive. Accepts run/validate and exits 0.
+          case "$1" in
+            run|validate|version) echo "caddy-naive stub v{{ naive.caddy_version | default('v2.11.2') }}"; exit 0 ;;
+            *) exit 0 ;;
+          esac
+
   roles:
     - role: naive

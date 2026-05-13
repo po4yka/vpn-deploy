@@ -1,0 +1,136 @@
+---
+# Converge for amneziawg static-verify scenario.
+# AmneziaWG userspace requires TUN device + kernel build deps not available
+# in CI containers. We skip the live AWG bring-up and only render the
+# config files so verify.yml can assert cohort param shape.
+
+- name: Converge amneziawg role (config-render only, no TUN device)
+  hosts: all
+  become: true
+  vars:
+    amneziawg_go_version: "v0.2.8"
+    amneziawg_tools_version: "v1.0.0"
+    amneziawg:
+      listen_port: 51820
+      interface: awg0
+      address_v4: "10.66.66.1/24"
+      address_v6: "fd42:42:42::1/64"
+    # Cohort: RTK South (Rostov Oblast) — values from docs/AWG-COHORTS.md
+    amneziawg_secrets:
+      server_private_key: "MOLECULE_STUB_PRIVATE_KEY_NOT_REAL_AAAAAAAAAAAAA="
+      jc: 4
+      jmin: 10
+      jmax: 50
+      s1: 0
+      s2: 0
+      h1: 1
+      h2: 2
+      h3: 3
+      h4: 4
+      peers: []
+
+  pre_tasks:
+    - name: Install minimal build deps (needed by pre-flight assert only)
+      ansible.builtin.apt:
+        name:
+          - golang
+          - git
+          - make
+          - libmnl-dev
+          - resolvconf
+          - iproute2
+          - iptables
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure amneziawg config directory
+      ansible.builtin.file:
+        path: /etc/amneziawg
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Stub amneziawg-go binary (skips actual compile)
+      ansible.builtin.copy:
+        dest: /opt/src/amneziawg-go/amneziawg-go
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          echo "amneziawg-go stub" && exit 0
+      args:
+        creates: /opt/src/amneziawg-go/amneziawg-go
+
+    - name: Ensure amneziawg-go source dir exists
+      ansible.builtin.file:
+        path: /opt/src/amneziawg-go
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Stub amneziawg-go binary
+      ansible.builtin.copy:
+        dest: /opt/src/amneziawg-go/amneziawg-go
+        owner: root
+        group: root
+        mode: "0755"
+        content: "#!/bin/sh\necho amneziawg-go stub && exit 0\n"
+        force: false
+
+    - name: Stub awg-tools source dir
+      ansible.builtin.file:
+        path: /opt/src/amneziawg-tools/src
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Stub awg binary (so make install creates=target passes)
+      ansible.builtin.copy:
+        dest: /usr/bin/awg
+        owner: root
+        group: root
+        mode: "0755"
+        content: "#!/bin/sh\necho awg stub && exit 0\n"
+        force: false
+
+    - name: Stub amneziawg-go installed binary
+      ansible.builtin.copy:
+        dest: /usr/local/bin/amneziawg-go
+        owner: root
+        group: root
+        mode: "0755"
+        content: "#!/bin/sh\necho amneziawg-go stub && exit 0\n"
+        force: false
+
+    - name: Stub awg-quick systemd unit template pre-req
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/awg-quick@.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=AmneziaWG Interface (stub) %i
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/bin/true
+          ExecStop=/bin/true
+          [Install]
+          WantedBy=multi-user.target
+        force: false
+
+    - name: Render awg0.conf directly (bypasses live role tasks that need TUN)
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../../../roles/amneziawg/templates/awg0.conf.j2"
+        dest: /etc/amneziawg/awg0.conf
+        owner: root
+        group: root
+        mode: "0600"
+      vars:
+        _inst: "{{ amneziawg_secrets }}"

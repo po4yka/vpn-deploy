@@ -57,3 +57,40 @@
             | grep -iE 'traceback|fatal|panic|failed to'
         executable: /bin/bash
       changed_when: false
+
+    - name: config.json is valid JSON
+      ansible.builtin.shell:
+        cmd: python3 -c "import json,sys; json.load(open('/etc/xray/config.json'))"
+      changed_when: false
+
+    - name: Read config.json for REALITY shortId assertions
+      ansible.builtin.slurp:
+        src: /etc/xray/config.json
+      register: xray_config_raw
+
+    - name: Parse config.json
+      ansible.builtin.set_fact:
+        xray_config: "{{ xray_config_raw.content | b64decode | from_json }}"
+
+    - name: Extract REALITY shortIds from config
+      ansible.builtin.set_fact:
+        reality_short_ids: >-
+          {{
+            xray_config.inbounds
+            | selectattr('streamSettings', 'defined')
+            | map(attribute='streamSettings')
+            | selectattr('realitySettings', 'defined')
+            | map(attribute='realitySettings')
+            | map(attribute='shortIds', default=[])
+            | flatten
+          }}
+
+    - name: All REALITY shortIds have even length (odd length breaks sing-box <= 1.10)
+      ansible.builtin.assert:
+        that:
+          - reality_short_ids | length > 0
+          - reality_short_ids | map('length') | select('odd') | list | length == 0
+        fail_msg: >-
+          REALITY shortIds must all have even length.
+          Found odd-length IDs: {{ reality_short_ids | select('defined') |
+          selectattr('__len__', 'odd') | list }}

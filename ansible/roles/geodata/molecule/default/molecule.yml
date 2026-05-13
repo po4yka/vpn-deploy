@@ -32,13 +32,15 @@ provisioner:
 verifier:
   name: ansible
 
-# Skip the converge step: the role downloads pinned URLs that the CI
-# runner shouldn't pull on every PR. syntax + create + destroy still
-# exercises the role file structure and idempotence of task defs.
+# prepare.yml seeds fixture files at the expected install paths and
+# computes their sha256 values so verify.yml can assert them without
+# any live network fetch. converge runs the role against the fixtures.
 scenario:
   test_sequence:
     - dependency
     - syntax
     - create
     - prepare
+    - converge
+    - verify
     - destroy

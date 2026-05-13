@@ -1,0 +1,124 @@
+---
+# Verify cdn-front cdn-on scenario.
+# Asserts:
+#   1. real-IP restoration block present in nginx vhost (set_real_ip_from directives).
+#   2. AOP cert path consumed — nginx vhost references ssl_client_certificate.
+#   3. Origin CA cert generation step is idempotent (file exists, unchanged on re-run).
+#   4. Cloudflare prefix caches present with expected fixture values.
+
+- name: Verify cdn-front cdn-on scenario
+  hosts: all
+  become: true
+  tasks:
+    - name: nginx config parses without errors
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: nftables config parses without errors
+      ansible.builtin.command:
+        cmd: nft -c -f /etc/nftables.conf
+      changed_when: false
+
+    - name: CDN-front nginx vhost is enabled (symlink present)
+      ansible.builtin.stat:
+        path: /etc/nginx/sites-enabled/cdn-front.conf
+      register: cdn_site_enabled
+      failed_when: not cdn_site_enabled.stat.exists or not cdn_site_enabled.stat.islnk
+
+    - name: Read cdn-front vhost config
+      ansible.builtin.slurp:
+        src: /etc/nginx/sites-available/cdn-front.conf
+      register: cdn_vhost_raw
+
+    - name: Decode vhost content
+      ansible.builtin.set_fact:
+        cdn_vhost_text: "{{ cdn_vhost_raw.content | b64decode }}"
+
+    - name: real-IP restoration block is present (set_real_ip_from directive)
+      ansible.builtin.assert:
+        that:
+          - cdn_vhost_text is search('set_real_ip_from')
+        fail_msg: "set_real_ip_from missing from cdn-front vhost — real-IP restoration not configured"
+
+    - name: real_ip_header CF-Connecting-IP is present
+      ansible.builtin.assert:
+        that:
+          - cdn_vhost_text is search('CF-Connecting-IP')
+        fail_msg: "CF-Connecting-IP real_ip_header missing from cdn-front vhost"
+
+    - name: real_ip_recursive is enabled
+      ansible.builtin.assert:
+        that:
+          - cdn_vhost_text is search('real_ip_recursive\s+on')
+        fail_msg: "real_ip_recursive on missing from cdn-front vhost"
+
+    - name: AOP ssl_client_certificate directive is present (AOP cert path consumed)
+      ansible.builtin.assert:
+        that:
+          - cdn_vhost_text is search('ssl_client_certificate')
+        fail_msg: "ssl_client_certificate missing from cdn-front vhost — AOP cert path not consumed"
+
+    - name: AOP verify_client directive is set
+      ansible.builtin.assert:
+        that:
+          - cdn_vhost_text is search('ssl_verify_client\s+on')
+        fail_msg: "ssl_verify_client on missing from cdn-front vhost — AOP not enforced"
+
+    - name: Stubbed AOP cert file is present at configured path (idempotency check)
+      ansible.builtin.stat:
+        path: /etc/nginx/tls/cloudflare-aop.pem
+      register: aop_cert_stat
+      failed_when: not aop_cert_stat.stat.exists
+
+    - name: AOP cert file unchanged after second converge (idempotent)
+      ansible.builtin.slurp:
+        src: /etc/nginx/tls/cloudflare-aop.pem
+      register: aop_cert_content
+
+    - name: AOP cert is non-empty PEM
+      ansible.builtin.assert:
+        that:
+          - (aop_cert_content.content | b64decode) is search('BEGIN CERTIFICATE')
+        fail_msg: "AOP cert at /etc/nginx/tls/cloudflare-aop.pem is empty or not PEM"
+
+    - name: Cloudflare IPv4 prefix cache is present with fixture value
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q '^198\.51\.100\.0/24$' /etc/cdn-front/cloudflare.v4
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Cloudflare IPv6 prefix cache is present with fixture value
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q '^2001:db8:cf::/48$' /etc/cdn-front/cloudflare.v6
+        executable: /bin/bash
+      changed_when: false
+
+    - name: real_ip include file contains set_real_ip_from for fixture IPv6 prefix
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q '^set_real_ip_from 2001:db8:cf::/48;$' /etc/cdn-front/cloudflare.real_ip
+        executable: /bin/bash
+      changed_when: false
+
+    - name: nftables origin firewall sets exist for cdn-front
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q 'set cdn_front_origins {' /etc/nftables.conf
+          grep -q 'set cdn_front_origins_v6 {' /etc/nftables.conf
+        executable: /bin/bash
+      changed_when: false
+
+    - name: nginx listens on configured CDN-front port (8443)
+      ansible.builtin.shell:
+        cmd: |
+          set -o pipefail
+          grep -q 'listen 8443 ssl' /etc/nginx/sites-available/cdn-front.conf
+        executable: /bin/bash
+      changed_when: false

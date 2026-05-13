@@ -1,0 +1,92 @@
+---
+# Verify geodata molecule scenario.
+# Asserts:
+#   1. GeoIP DB cache file lands at expected path (/usr/local/share/xray/).
+#   2. sha256 of the cached file matches the fixture planted in prepare.yml.
+#   3. Database refresh timer is installed and enabled.
+# No live network call is made — the fixture was seeded in prepare.yml.
+
+- name: Verify geodata role
+  hosts: all
+  become: true
+  tasks:
+    - name: geosite.dat is present at expected install path
+      ansible.builtin.stat:
+        path: /usr/local/share/xray/geosite.dat
+      register: geosite_stat
+      failed_when: not geosite_stat.stat.exists
+
+    - name: geoip.dat is present at expected install path
+      ansible.builtin.stat:
+        path: /usr/local/share/xray/geoip.dat
+      register: geoip_stat
+      failed_when: not geoip_stat.stat.exists
+
+    - name: Read fixture checksums written by prepare.yml
+      ansible.builtin.slurp:
+        src: /tmp/geodata-fixture-checksums.env
+      register: fixture_checksums_raw
+
+    - name: Parse fixture checksums
+      ansible.builtin.set_fact:
+        fixture_geosite_sha256: >-
+          {{ (fixture_checksums_raw.content | b64decode)
+             | regex_search('GEOSITE_SHA256=([0-9a-f]+)', '\1') | first }}
+        fixture_geoip_sha256: >-
+          {{ (fixture_checksums_raw.content | b64decode)
+             | regex_search('GEOIP_SHA256=([0-9a-f]+)', '\1') | first }}
+
+    - name: Compute actual geosite.dat sha256
+      ansible.builtin.command:
+        cmd: sha256sum /usr/local/share/xray/geosite.dat
+      register: actual_geosite_sha256_out
+      changed_when: false
+
+    - name: Compute actual geoip.dat sha256
+      ansible.builtin.command:
+        cmd: sha256sum /usr/local/share/xray/geoip.dat
+      register: actual_geoip_sha256_out
+      changed_when: false
+
+    - name: geosite.dat sha256 matches fixture
+      ansible.builtin.assert:
+        that:
+          - actual_geosite_sha256_out.stdout.split()[0] == fixture_geosite_sha256
+        fail_msg: >-
+          geosite.dat checksum mismatch.
+          expected={{ fixture_geosite_sha256 }}
+          actual={{ actual_geosite_sha256_out.stdout.split()[0] }}
+
+    - name: geoip.dat sha256 matches fixture
+      ansible.builtin.assert:
+        that:
+          - actual_geoip_sha256_out.stdout.split()[0] == fixture_geoip_sha256
+        fail_msg: >-
+          geoip.dat checksum mismatch.
+          expected={{ fixture_geoip_sha256 }}
+          actual={{ actual_geoip_sha256_out.stdout.split()[0] }}
+
+    - name: Refresh script is present
+      ansible.builtin.stat:
+        path: /usr/local/sbin/vpn-geodata-refresh.sh
+      register: refresh_script
+      failed_when: not refresh_script.stat.exists
+
+    - name: Refresh script is executable
+      ansible.builtin.assert:
+        that:
+          - refresh_script.stat.executable
+        fail_msg: "vpn-geodata-refresh.sh is not executable"
+
+    - name: Refresh systemd timer unit is installed
+      ansible.builtin.stat:
+        path: /etc/systemd/system/vpn-geodata-refresh.timer
+      register: refresh_timer
+      failed_when: not refresh_timer.stat.exists
+
+    - name: Refresh timer is enabled
+      ansible.builtin.command:
+        cmd: systemctl is-enabled vpn-geodata-refresh.timer
+      register: timer_enabled
+      changed_when: false
+      failed_when: timer_enabled.stdout not in ['enabled', 'static']

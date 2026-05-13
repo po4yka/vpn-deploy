@@ -1,17 +1,38 @@
 ---
-# Converge is intentionally skipped in the scenario sequence — see
-# molecule.yml header. This file exists so `molecule converge` invoked
-# manually still has something to run for one-off debugging.
-- name: Converge geodata role
+# Converge geodata role using fixture files seeded by prepare.yml.
+# The fixture checksums are read from /tmp/geodata-fixture-checksums.env
+# (written by prepare.yml) so the role's checksum assertion passes without
+# any live network fetch. The get_url tasks see the files already present
+# with matching checksums and skip the download.
+- name: Converge geodata role (fixture-backed, no live download)
   hosts: all
   become: true
-  vars:
-    geodata:
-      geosite_url: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/download/202401010000/geosite.dat"
-      geoip_url: "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/download/202401010000/geoip.dat"
-      geosite_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
-      geoip_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
-      install_dir: /usr/local/share/xray
-      refresh_interval: "1d"
+
+  pre_tasks:
+    - name: Read fixture checksums from prepare.yml
+      ansible.builtin.slurp:
+        src: /tmp/geodata-fixture-checksums.env
+      register: fixture_env_raw
+
+    - name: Parse fixture checksums into facts
+      ansible.builtin.set_fact:
+        _geosite_sha256: >-
+          {{ (fixture_env_raw.content | b64decode)
+             | regex_search('GEOSITE_SHA256=([0-9a-f]+)', '\1') | first }}
+        _geoip_sha256: >-
+          {{ (fixture_env_raw.content | b64decode)
+             | regex_search('GEOIP_SHA256=([0-9a-f]+)', '\1') | first }}
+
   roles:
     - role: geodata
+      vars:
+        geodata:
+          # Point at localhost URLs that will 404 — the role's get_url uses
+          # force: true but the checksum guard means it skips if the file at
+          # dest already has the right sha256. prepare.yml pre-seeded both.
+          geosite_url: "http://127.0.0.1:0/geosite.dat"
+          geoip_url: "http://127.0.0.1:0/geoip.dat"
+          geosite_sha256: "{{ _geosite_sha256 }}"
+          geoip_sha256: "{{ _geoip_sha256 }}"
+          install_dir: /usr/local/share/xray
+          refresh_interval: "1d"

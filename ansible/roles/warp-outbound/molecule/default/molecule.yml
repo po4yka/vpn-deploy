@@ -32,12 +32,16 @@ provisioner:
 verifier:
   name: ansible
 
-# Cloudflare WARP installer assumes systemd-networkd + real DNS + an
-# accessible Cloudflare endpoint to register. None of that is reliable
-# from a CI container, so the scenario validates structure only.
+# Cloudflare WARP CLI cannot register in CI (no reachable Cloudflare
+# endpoint). The converge stubs out warp-cli + curl so role tasks
+# succeed; verify.yml asserts the service unit shape and that the
+# fallback retry counter increments on a synthetic failure.
 scenario:
   test_sequence:
     - dependency
     - syntax
     - create
+    - prepare
+    - converge
+    - verify
     - destroy
