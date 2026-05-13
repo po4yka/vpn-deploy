@@ -2,11 +2,12 @@
 
 The `real-vps-deploy` workflow approximates a production deploy in
 GitHub Actions: provision an ephemeral UpCloud VPS, run the full
-playbook + verify + smoke-test against it, destroy it. Docker
-molecule scenarios catch most regressions; this gate catches the
-ones that depend on the real cloud environment (template behaviour,
+playbook plus `verify.yml` against it, then destroy it. Docker
+molecule scenarios catch most regressions; this gate catches the ones
+that depend on the real cloud environment (template behaviour,
 cloud-init quirks, provider firewall ordering, real systemd unit
-startup, etc.).
+startup, etc.). It does not currently run `make smoke-test`; that
+remains an operator-driven live-traffic check.
 
 ## When it runs
 
@@ -20,8 +21,8 @@ provider credit and takes ~15-20 minutes per run. Two triggers:
     role ordering, or cloud-init.
 
 The job refuses to start on a fork PR (secrets aren't exposed there)
-and uses a `real-vps-deploy` concurrency group so two runs never race
-against the UpCloud account.
+and uses per-distro concurrency groups so two runs for the same distro
+never race against the UpCloud account.
 
 ## Required GitHub secrets
 

@@ -37,7 +37,7 @@ GitHub → Actions → **branch-protection** → Run workflow → leave default
 (`main`) → Run.
 
 Verify it succeeded; the job logs should print the required-status-check
-count (currently 21).
+count (currently 28).
 
 ### 4. Verify in Settings
 
@@ -48,7 +48,7 @@ Settings → Branches → `main` → see:
 - Dismiss stale pull request approvals ✅
 - Require review from Code Owners ✅
 - Require status checks to pass before merging ✅
-- 21 status checks listed
+- 28 status checks listed
 - Require branches to be up to date before merging ✅
 - Require conversation resolution before merging ✅
 - Require linear history ✅
@@ -78,6 +78,13 @@ Settings → Branches → `main` → see:
 | ci.yml | `secrets-coverage` |
 | ci.yml | `templates-render` |
 | ci.yml | `yamllint` |
+| ci.yml | `pytest unit tests` |
+| ci.yml | `jinja snapshot diff` |
+| ci.yml | `secrets schema (lenient on example)` |
+| ci.yml | `terraform test (upcloud)` |
+| ci.yml | `terraform test (hetzner)` |
+| ci.yml | `terraform test (vultr)` |
+| ci.yml | `molecule failure (watchdog)` |
 | codeql.yml | `codeql (python)` |
 | codeql.yml | `codeql (actions)` |
 

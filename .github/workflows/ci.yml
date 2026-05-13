@@ -248,18 +248,22 @@ jobs:
         run: python3 scripts/validate-secrets.py
 
   tf-test:
-    name: terraform test (mock_provider)
+    name: terraform test (${{ matrix.provider }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [upcloud, hetzner, vultr]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
       - uses: hashicorp/setup-terraform@5e8dbf3c6d9deaf4193ca7a8fb23f2ac83bb6c85  # v4
         with:
           terraform_version: "1.15.2"
       - name: terraform init -backend=false
-        working-directory: terraform/providers/upcloud
+        working-directory: terraform/providers/${{ matrix.provider }}
         run: terraform init -backend=false
       - name: terraform test
-        working-directory: terraform/providers/upcloud
+        working-directory: terraform/providers/${{ matrix.provider }}
         run: terraform test
 
   molecule-failure-scenarios:

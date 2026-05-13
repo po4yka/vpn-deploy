@@ -25,6 +25,24 @@ make PROVIDER=vultr     init plan apply
 The Ansible layer is provider-neutral — only the inventory render script
 reads provider-specific Terraform outputs.
 
+## Native tests
+
+Each provider root has provider-mocked `terraform test` coverage under
+`providers/<name>/tests/`. These tests run without contacting cloud APIs
+and assert the shared inventory output contract plus provider-specific
+firewall and server-resource invariants:
+
+```bash
+terraform -chdir=terraform/providers/upcloud init -backend=false
+terraform -chdir=terraform/providers/upcloud test
+
+terraform -chdir=terraform/providers/hetzner init -backend=false
+terraform -chdir=terraform/providers/hetzner test
+
+terraform -chdir=terraform/providers/vultr init -backend=false
+terraform -chdir=terraform/providers/vultr test
+```
+
 ## State
 
 State is local by default (`*.tfstate` next to the root module, in

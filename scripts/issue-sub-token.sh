@@ -105,13 +105,11 @@ if (( EMIT_QR )); then
   echo "QR rendered: $qr_out"
 fi
 
-# Audit-log the issuance.
-if command -v age >/dev/null 2>&1 && [[ -f "${HOME}/.config/vpn-provision/age.key" ]]; then
-  note="hash=${token_hash:0:16} expires=${EXPIRES:-none} qr=${EMIT_QR} refresh=${REFRESH_TOKEN:+yes}"
-  ENV="$ENV" PROVIDER="$PROVIDER" \
-    "${REPO_ROOT}/scripts/audit-log.sh" append \
-      --action issue-sub-token \
-      --client "$CLIENT" \
-      --note "$note" || \
-    echo "(warn) audit-log append failed; continuing" >&2
-fi
+# Audit-log the issuance without blocking token delivery if local logging is
+# unavailable.
+note="hash=${token_hash:0:16} expires=${EXPIRES:-none} qr=${EMIT_QR} refresh=${REFRESH_TOKEN:+yes}"
+ENV="$ENV" PROVIDER="$PROVIDER" \
+  "${REPO_ROOT}/scripts/audit-log.sh" append-best-effort \
+    --action issue-sub-token \
+    --client "$CLIENT" \
+    --note "$note"

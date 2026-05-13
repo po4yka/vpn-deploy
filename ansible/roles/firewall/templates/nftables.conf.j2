@@ -26,9 +26,16 @@ table inet filter {
 
 {% if (vpn.enable_cdn_front | default(false)) and (cdn_front.origin_firewall | default(true)) %}
   # Cloudflare origin prefixes — populated by the cdn-front role's
-  # daily refresh cron from https://www.cloudflare.com/ips-v4
+  # daily refresh cron from https://www.cloudflare.com/ips-v{4,6}
   set cdn_front_origins {
     type ipv4_addr
+    flags interval
+  }
+
+  # IPv6 origins must be filtered explicitly because the CDN-front
+  # nginx vhost also listens on [::]:cdn_front.port.
+  set cdn_front_origins_v6 {
+    type ipv6_addr
     flags interval
   }
 {% endif %}
@@ -102,6 +109,7 @@ table inet filter {
     # /etc/cron.daily/cdn-front-refresh-cf-prefixes
 {% if cdn_front.origin_firewall | default(true) %}
     tcp dport {{ cdn_front.port | default(8443) }} ip saddr @cdn_front_origins accept
+    tcp dport {{ cdn_front.port | default(8443) }} ip6 saddr @cdn_front_origins_v6 accept
 {% else %}
     tcp dport {{ cdn_front.port | default(8443) }} accept
 {% endif %}

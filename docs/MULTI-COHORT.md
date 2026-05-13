@@ -67,20 +67,28 @@ Properties:
 The `firewall` role automatically opens every cohort port. The single-
 port fallback uses `xray_port` (group_vars) as before.
 
-## Client emit (single-cohort scope today)
+## Client emit (cohort-aware)
 
-`scripts/emit-singbox.sh` still emits a single REALITY outbound per
-host pair, picking the default `xray_port`. Per-cohort client emit
-(one outbound per cohort the client is in) is left for a follow-up —
-operators issuing multi-cohort clients today should hand-edit the
-emitted sing-box JSON or maintain per-cohort SOPS files.
+`scripts/emit-singbox.sh` is multi-cohort aware for REALITY. When
+`xray.cohorts` is non-empty, it emits one REALITY outbound per cohort
+that lists the requested client, using that cohort's `port` and
+`flow_mode`. When `xray.cohorts` is empty or missing, it keeps the
+legacy single-outbound behavior on `xray_port` with
+`vpn.xray_flow_mode`.
+
+For multi-host bundles, pass `HOSTS=provider:env,...` and optionally
+`COHORTS=name,...`. When `COHORTS` is omitted, the emitter can infer a
+cohort from `ansible/inventory/generated.ini` by matching the Terraform
+`server_hostname` to a `vpn-<cohort>` inventory group. If a client is
+not listed in any configured cohort, the emitter fails instead of
+silently producing a bundle with the wrong port.
 
 ## Subscription bundling
 
 If you use `subscription-host`, each device's payload should include
 the cohort's port. The bootstrap helper `scripts/issue-bootstrap.sh`
-calls `emit-singbox.sh` underneath, so once the emitter learns about
-cohorts, bootstrap inherits the change.
+calls `emit-singbox.sh` underneath, so bootstrap payloads inherit the
+same cohort-specific REALITY outbounds.
 
 ## Not multi-cohort (intentionally)
 

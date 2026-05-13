@@ -47,7 +47,9 @@ overnight.
   public CA cert for the domain you control, listening on 443/tcp/udp,
   proxying the XHTTP path to Xray. No `set_real_ip_from`, no
   `CF-Connecting-IP`, no Origin CA logic.
-- The `cdn-front` role tag is reserved but not implemented in v1.
+- `ansible/roles/cdn-front` exists as a separate, opt-in tactical role
+  for Cloudflare-fronted XHTTP. It is not part of the RU baseline and
+  is gated by `vpn.enable_cdn_front: false` by default.
 
 ## When you might still want CDN
 
@@ -87,8 +89,9 @@ on `nginx-xhttp`.
   default (`vpn.enable_cdn_front: false`) and physically separate from
   `nginx-xhttp` — turning it on does not flip a flag in the baseline
   vhost. The role configures real-IP restoration from
-  `CF-Connecting-IP`, an `nftables` origin-firewall set populated from
-  `cloudflare.com/ips-v4` (rebuilt daily), and optional Authenticated
+  `CF-Connecting-IP`, `nftables` origin-firewall sets populated from
+  `cloudflare.com/ips-v4` and `cloudflare.com/ips-v6` (rebuilt daily),
+  and optional Authenticated
   Origin Pulls. Operators reach for this role for short-term cover
   during an IP-burn rotation or in cohorts where browser camouflage is
   worth the policy-risk dependency.

@@ -1,0 +1,93 @@
+---
+- name: Converge cdn-front role
+  hosts: all
+  become: true
+  vars:
+    allowed_ssh_cidrs:
+      - "10.0.0.0/8"
+      - "2001:db8:100::/48"
+    vpn:
+      enable_xray_reality: false
+      enable_nginx_xhttp: false
+      enable_hysteria: false
+      enable_amneziawg: false
+      enable_cdn_front: true
+    cdn_front:
+      port: 8443
+      server_name: cdn.example.test
+      upstream_addr: "127.0.0.1"
+      upstream_port: 10085
+      xhttp_path: "/app-sync"
+      cf_prefix_dir: /etc/cdn-front
+      cf_refresh_cron_hour: 4
+      origin_firewall: true
+      aop_cert_path: ""
+  pre_tasks:
+    - name: Install packages needed by cdn-front and firewall
+      ansible.builtin.apt:
+        name:
+          - nftables
+          - openssl
+        state: present
+        update_cache: true
+
+    - name: Ensure nginx TLS directory exists
+      ansible.builtin.file:
+        path: /etc/nginx/tls
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Generate a self-signed cert/key for cdn-front nginx -t
+      ansible.builtin.command:
+        cmd: |
+          openssl req -x509 -newkey rsa:2048 -nodes
+            -keyout /etc/nginx/tls/cdn.example.test.key
+            -out /etc/nginx/tls/cdn.example.test.fullchain.pem
+            -subj /CN=cdn.example.test
+            -days 1
+        creates: /etc/nginx/tls/cdn.example.test.fullchain.pem
+
+    - name: Install fixture Cloudflare prefix fetcher
+      ansible.builtin.copy:
+        dest: /usr/local/bin/curl
+        owner: root
+        group: root
+        mode: "0755"
+        content: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          out=""
+          while [[ $# -gt 0 ]]; do
+            case "$1" in
+              -o)
+                out="$2"
+                shift 2
+                ;;
+              -*)
+                shift
+                ;;
+              *)
+                url="$1"
+                shift
+                ;;
+            esac
+          done
+          [[ -n "${out:-}" ]] || { echo "missing -o output path" >&2; exit 1; }
+          [[ -n "${url:-}" ]] || { echo "missing URL" >&2; exit 1; }
+          case "$url" in
+            https://www.cloudflare.com/ips-v4)
+              printf '%s\n' '198.51.100.0/24' > "$out"
+              ;;
+            https://www.cloudflare.com/ips-v6)
+              printf '%s\n' '2001:db8:cf::/48' > "$out"
+              ;;
+            *)
+              echo "unexpected curl URL: $url" >&2
+              exit 1
+              ;;
+          esac
+  roles:
+    - role: firewall
+    - role: cdn-front

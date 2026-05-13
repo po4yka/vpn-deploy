@@ -163,6 +163,9 @@ dry-run: pre-deploy-check
 deploy: pre-deploy-check
 	VPN_SECRETS_FILE=$(SECRETS_FILE) \
 	ansible-playbook $(ANSIBLE_DIR)/playbooks/site.yml
+	@ENV=$(ENV) PROVIDER=$(PROVIDER) ./scripts/audit-log.sh append-best-effort \
+	  --action site-deploy \
+	  --note "playbook=site.yml warp_outbound_role=conditional"
 
 verify: pre-deploy-check
 	VPN_SECRETS_FILE=$(SECRETS_FILE) \
@@ -191,6 +194,9 @@ rollback-config:
 rotate-credentials:
 	VPN_SECRETS_FILE=$(SECRETS_FILE) \
 	ansible-playbook $(ANSIBLE_DIR)/playbooks/rotate-credentials.yml
+	@ENV=$(ENV) PROVIDER=$(PROVIDER) ./scripts/audit-log.sh append-best-effort \
+	  --action rotate-credentials \
+	  --note "playbook=rotate-credentials.yml secrets_file=$(notdir $(SECRETS_FILE))"
 
 destroy:
 	PROVIDER=$(PROVIDER) ENV=$(ENV) ./scripts/destroy.sh

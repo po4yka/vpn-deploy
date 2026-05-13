@@ -107,14 +107,10 @@ if (( EMIT_QR )); then
 fi
 
 # Audit-log the issuance. Best-effort: failure here doesn't unwind the
-# already-installed payload — the URL is already valid. Log decrypt-
-# verifiable via `make audit-log` on the same workstation.
-if command -v age >/dev/null 2>&1 && [[ -f "${HOME}/.config/vpn-provision/age.key" ]]; then
-  note_value="expires=${EXPIRES:-none} qr=${EMIT_QR}"
-  ENV="$ENV" PROVIDER="$PROVIDER" \
-    "${REPO_ROOT}/scripts/audit-log.sh" append \
-      --action issue-bootstrap \
-      --client "$CLIENT" \
-      --note "$note_value" || \
-    echo "(warn) audit-log append failed; continuing" >&2
-fi
+# already-installed payload because the URL is already valid.
+note_value="expires=${EXPIRES:-none} qr=${EMIT_QR}"
+ENV="$ENV" PROVIDER="$PROVIDER" \
+  "${REPO_ROOT}/scripts/audit-log.sh" append-best-effort \
+    --action issue-bootstrap \
+    --client "$CLIENT" \
+    --note "$note_value"

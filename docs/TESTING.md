@@ -9,14 +9,15 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 
 | Artifact | Static check | Render check | Functional test (molecule) | Notes |
 |---|---|---|---|---|
-| **Terraform — UpCloud** | `terraform fmt -check` + `terraform validate` (CI) | n/a | n/a | CI matrix runs all three providers. |
-| **Terraform — Hetzner / Vultr** | `terraform fmt -check` + `terraform validate` (CI) | n/a | n/a | Provider roots mirror the inventory-facing UpCloud outputs. |
-| **cloud-init template** | `cloud-init schema --config-file` (CI) | rendered via Terraform `console` | n/a | |
+| **Terraform — UpCloud** | `terraform fmt -check` + `terraform validate` + `terraform test` (CI) | n/a | n/a | CI matrix runs all three providers. |
+| **Terraform — Hetzner / Vultr** | `terraform fmt -check` + `terraform validate` + `terraform test` (CI) | n/a | n/a | Native tests cover server/output invariants, honeypot IP allocation, firewall toggles, SSH scoping, XHTTP port behavior, and port validation. |
+| **cloud-init template** | `cloud-init schema --config-file` (CI) | rendered from the Terraform template with CI stub vars | n/a | |
 | **Ansible playbooks** | `ansible-lint` + `ansible-playbook --syntax-check` (CI) | n/a | n/a | site.yml asserts VPN_SECRETS_FILE is set; CI passes the example schema as a stub. |
 | **Ansible role: baseline** | ansible-lint | render check | **molecule** (debian13 + ubuntu24.04) | tests sshd hardening, sysctl, timesync, IPv4 forwarding gating. |
 | **Ansible role: firewall** | ansible-lint | render check | **molecule** | tests nftables.conf parse + presence of expected ports. |
 | **Ansible role: xray** | ansible-lint | render check (JSON validity) | **molecule** (template-only, stub binary) | tests config.json shape, systemd unit, symlink rollback. |
 | **Ansible role: nginx-xhttp** | ansible-lint | render check (`nginx -t`) | **molecule** (idempotence + verify) | self-signed cert generated in pre_tasks; verifies no Cloudflare-specific directives leaked into RU baseline. |
+| **Ansible role: cdn-front** | ansible-lint | render check (`nginx -t`) | **molecule** | opt-in tactical Cloudflare-fronted XHTTP role; not part of the RU baseline or required CI molecule matrix. |
 | **Ansible role: hysteria** | ansible-lint | render check | **molecule** (template-only, stub binary) | verifies clients render + Salamander disabled by default. |
 | **Ansible role: amneziawg** | ansible-lint | render check | **molecule (syntax+create only)** | full converge needs a kernel TUN device + golang build of amneziawg-go that Docker can't reliably provide; scenario exercises task-file structure so regressions are caught early, deeper testing happens against a real VPS. |
 | **Ansible role: monitoring** | ansible-lint | render check | **molecule** | verifies node_exporter + journald + logrotate. |
@@ -28,11 +29,11 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 | **Ansible role: honeypot** | ansible-lint | render check | **molecule** + idempotence | verifies service active, listener bound to configured port, script installed. |
 | **Ansible role: probe-ratelimit** | ansible-lint | render check | **molecule** + idempotence | verifies daemon script + systemd unit + active state. nftables `probe_offenders` set is exercised in the full-stack scenario. |
 | **Ansible role: warp-outbound** | ansible-lint | render check | **molecule (syntax-only sequence)** | Cloudflare WARP installer expects systemd-networkd + a registerable endpoint not available in CI; structure validation only. |
-| **Full stack** | ansible-lint | render check | **molecule (full-stack scenario)** | runs the entire `site.yml` end-to-end inside a privileged Debian-13 container with NET_ADMIN; verifies every enabled service is up + listening. See `ansible/molecule/full-stack/`. |
-| **Shell scripts (16)** | `bash -n` syntax + **`shellcheck -s bash -S warning`** (CI) | n/a | n/a | every script in `scripts/` runs through shellcheck. |
+| **Full stack** | ansible-lint | render check | **`make molecule-full-stack`** (manual) | runs the entire `site.yml` end-to-end inside a privileged Debian-13 container with NET_ADMIN; verifies every enabled service is up + listening. See `ansible/molecule/full-stack/`. |
+| **Shell scripts (39)** | `bash -n` syntax + **`shellcheck -s bash -S warning`** (CI) | n/a | n/a | every shell script in `scripts/` runs through shellcheck. |
 | **Python validators** | implicit — they validate everything else | n/a | n/a | |
 | **Secrets schema** | **`scripts/check-secrets-coverage.py`** | n/a | n/a | Walks every Jinja2 template, ensures every top-level variable is declared in `secrets/prod.secrets.example.yaml`, `group_vars/all.yml`, or a role's `defaults/main.yml`. |
-| **Jinja2 templates (20)** | **`scripts/check-templates-render.py`** | renders all 20 against synthetic + example data | n/a | Catches Jinja syntax errors, JSON-invalid output for `*.json.j2`, nginx parse errors for site configs. |
+| **Jinja2 templates (27)** | **`scripts/check-templates-render.py`** | renders all 27 role templates against synthetic + example data | n/a | Catches Jinja syntax errors, JSON-invalid output for `*.json.j2`, nginx parse errors for site configs. |
 | **Cohort group_vars** | render check (group_vars/all.yml + cohort file are merged into render env) | n/a | n/a | If a cohort file references a flag the role doesn't accept, render fails. |
 | **YAML formatting** | **yamllint** (CI) | n/a | n/a | uses `.yamllint.yml` profile. |
 | **Secret leak detection** | **gitleaks** with custom rules (CI + pre-commit) | n/a | n/a | Custom rules: VLESS/Trojan/Hysteria URIs, REALITY priv keys, WG priv keys, age-secret-key, subscription tokens. |
@@ -40,7 +41,7 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 | **Decrypted-secrets audit** | **`scripts/spot-check-secrets.py`** (gating `make deploy`/`verify`) | walks the decrypted YAML | n/a | Placeholder check, cert expiry, RSA modulus match, H1..H4 type, password length. Bypass with `SKIP_PRECHECK=1`. |
 | **Cert hygiene** | **`scripts/check-certs.sh`** (gating `make deploy`/`verify`) | openssl-driven | n/a | SAN coverage, expiry < 14 days, self-signed detection, modulus match across nginx_xhttp / hysteria / naive. |
 | **Pinned-binary reproducibility** | **`.github/workflows/reproducible-build.yml`** (CI) | go build + sha256 compare | n/a | Three jobs: xray (from-source rebuild → soft-warn on bytewise drift), hysteria (hard-fail on release-asset sha256 mismatch), RealiTLScanner (same). |
-| **Real-VPS end-to-end** | **`.github/workflows/real-vps-deploy.yml`** (workflow_dispatch / `ci-real-deploy` label) | provision → site.yml → verify → smoke-test → destroy | n/a | Approximates production deploy as closely as Actions allows. Ephemeral UpCloud VPS per run. See `docs/CI-REAL-DEPLOY.md`. |
+| **Real-VPS end-to-end** | **`.github/workflows/real-vps-deploy.yml`** (workflow_dispatch / `ci-real-deploy` label) | provision → site.yml → verify → destroy | n/a | Approximates production deploy as closely as Actions allows. Ephemeral UpCloud VPS per run. Does not currently run smoke-test. See `docs/CI-REAL-DEPLOY.md`. |
 | **Kill-switch validation** | **`scripts/check-singbox-killswitch.py`** (operator-driven) | static JSON analysis | n/a | Verifies auto_route + strict_route, route.final ≠ direct, DNS detour ≠ direct, no IPv6-only outbounds. |
 
 ## Test phases mapped to operator workflow
@@ -48,8 +49,8 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 | Operator step | Tests that protect it |
 |---|---|
 | `git commit` (local) | pre-commit hooks: gitleaks, terraform fmt, ansible-lint, yamllint, **shellcheck**, **secrets-coverage**, **templates-render**, **placeholder-scan** |
-| `git push` (PR) | CI matrix: terraform fmt+validate (3 providers), cloud-init schema, ansible-lint + syntax, **all 15 role + 1 full-stack molecule scenarios**, **reproducible-build** (xray + hysteria + RealiTLScanner sha256), shellcheck, secrets-coverage, templates-render, yamllint, gitleaks |
-| PR labeled `ci-real-deploy` | **real-vps-deploy** workflow: provisions an ephemeral UpCloud VPS, runs site.yml + verify + smoke-test, destroys — closest approximation to production in CI. See `docs/CI-REAL-DEPLOY.md`. |
+| `git push` (PR) | CI matrix: terraform fmt+validate (3 providers), terraform test (3 providers), cloud-init schema, ansible-lint + syntax, required molecule scenarios for baseline/firewall/xray/hysteria/nginx-xhttp/watchdog/monitoring/backup/subscription-host plus watchdog failure, shellcheck, secrets-coverage, templates-render, yamllint, gitleaks, unit tests, snapshot diff, secrets schema; reproducible-build covers xray + hysteria + RealiTLScanner sha256. |
+| PR labeled `ci-real-deploy` | **real-vps-deploy** workflow: provisions an ephemeral UpCloud VPS, runs site.yml + verify, destroys — closest approximation to production in CI. See `docs/CI-REAL-DEPLOY.md`. |
 | `make validate` (operator) | terraform fmt + validate + gitleaks + ansible-lint + ansible syntax-check |
 | `make validate-target` | live probe of REALITY target (TLS / H2 / SAN / uTLS / ASN / template OPSEC) |
 | `make plan` | terraform plan (catches infrastructure drift) |

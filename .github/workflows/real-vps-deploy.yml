@@ -2,7 +2,7 @@
 name: real-vps-deploy
 
 # Ephemeral end-to-end deploy gate. Provisions a fresh UpCloud VPS,
-# runs site.yml + verify + smoke-test against it, then destroys
+# runs site.yml + verify against it, then destroys
 # everything. Approximates a production deploy as closely as the CI
 # environment allows — closer than the docker-only molecule scenarios
 # can.

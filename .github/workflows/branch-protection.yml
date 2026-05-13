@@ -60,7 +60,9 @@ jobs:
             "pytest unit tests",
             "jinja snapshot diff",
             "secrets schema (lenient on example)",
-            "terraform test (mock_provider)",
+            "terraform test (upcloud)",
+            "terraform test (hetzner)",
+            "terraform test (vultr)",
             "molecule failure (watchdog)",
             "codeql (python)",
             "codeql (actions)"

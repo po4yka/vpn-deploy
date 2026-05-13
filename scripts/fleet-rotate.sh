@@ -138,6 +138,11 @@ for idx in $(seq "$start_idx" $((total - 1))); do
     ${green_zone:+GREEN_ZONE="$green_zone"} \
     "${REPO_ROOT}/scripts/blue-green.sh"
 
+  ENV="$blue_env" PROVIDER="$prov" \
+    "${REPO_ROOT}/scripts/audit-log.sh" append-best-effort \
+      --action fleet-rotate-step \
+      --note "plan=${plan_id} index=$((idx+1))/${total} green_env=${green_env} green_zone=${green_zone:-same}"
+
   jq --argjson idx "$((idx+1))" --arg completed_entry "${prov}:${blue_env}→${green_env}" \
     '.next_idx = $idx | .completed += [$completed_entry]' \
     "$STATE" > "${STATE}.tmp" && mv "${STATE}.tmp" "$STATE"
@@ -146,3 +151,8 @@ done
 echo
 echo "fleet rotation complete (plan=${plan_id}, ${total} entries)"
 echo "state file: $STATE"
+
+"${REPO_ROOT}/scripts/audit-log.sh" append-best-effort \
+  --action fleet-rotate-complete \
+  --provider fleet \
+  --note "plan=${plan_id} rotations=${total}"

@@ -22,6 +22,10 @@ if [[ ! -s "$WORK/v4" ]] || ! grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]+$'
   echo "refresh-cf-prefixes: v4 list looks malformed; keeping previous" >&2
   exit 1
 fi
+if [[ ! -s "$WORK/v6" ]] || ! grep -Eq '^[0-9A-Fa-f:]+/[0-9]+$' "$WORK/v6"; then
+  echo "refresh-cf-prefixes: v6 list looks malformed; keeping previous" >&2
+  exit 1
+fi
 
 # nginx real_ip_header form:
 #   set_real_ip_from <CIDR>;
@@ -44,11 +48,16 @@ if command -v systemctl >/dev/null 2>&1; then
   systemctl reload nginx 2>/dev/null || true
 fi
 
-# Origin firewall: rebuild the nftables set from cloudflare.v4.
+# Origin firewall: rebuild the nftables sets from cloudflare.v4/v6.
 if [[ "{{ cdn_front.origin_firewall | string | lower }}" == "true" ]]; then
   nft flush set inet filter cdn_front_origins 2>/dev/null || true
+  nft flush set inet filter cdn_front_origins_v6 2>/dev/null || true
   while IFS= read -r cidr; do
     [[ -n "$cidr" ]] || continue
     nft add element inet filter cdn_front_origins { "$cidr" } 2>/dev/null || true
   done < "$PREFIX_DIR/cloudflare.v4"
+  while IFS= read -r cidr; do
+    [[ -n "$cidr" ]] || continue
+    nft add element inet filter cdn_front_origins_v6 { "$cidr" } 2>/dev/null || true
+  done < "$PREFIX_DIR/cloudflare.v6"
 fi

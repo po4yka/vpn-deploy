@@ -15,77 +15,115 @@
 #
 # Writers:
 #   scripts/audit-log.sh append --action issue-bootstrap \
-#                               --client phone --note "OTP=…"
+#                               --client phone --note "OTP=..."
+#   scripts/audit-log.sh append-best-effort --action new-client \
+#                                           --client phone
 #   make audit-log-append ACTION=… CLIENT=… [NOTE=…]
 #
 # Reader:
 #   scripts/audit-log.sh read           # prints JSONL of every event
 #   make audit-log                      # equivalent
 #
-# Hooks: issue-bootstrap.sh writes one record per bootstrap URL issued.
-# Other lifecycle scripts (new-client.sh, rotate-credentials.yml,
-# warp-outbound rotation) are intentionally NOT auto-hooked yet — the
-# expectation is to wire them per-operator as adoption proves the
-# format. The append entry-point is stable.
+# Hooks: issue-bootstrap.sh, issue-sub-token.sh, new-client.sh,
+# rotate-secrets.sh, rotate-credentials, fleet-rotate, and the deploy
+# wrapper append best-effort records. These hooks never fail the
+# lifecycle command if local audit logging is unavailable.
 set -euo pipefail
 
 CONFIG_DIR="${HOME}/.config/vpn-provision"
 AGE_KEY="${AGE_KEY:-${CONFIG_DIR}/age.key}"
 LOG_FILE="${AUDIT_LOG_FILE:-${CONFIG_DIR}/audit.log.age}"
-mkdir -p "$CONFIG_DIR"; chmod 0700 "$CONFIG_DIR"
 
-cmd="${1:-}"; [[ -n "$cmd" ]] || { echo "usage: $0 append|read [args]" >&2; exit 1; }
+cmd="${1:-}"; [[ -n "$cmd" ]] || { echo "usage: $0 append|append-best-effort|read [args]" >&2; exit 1; }
 shift || true
 
 require() {
   command -v "$1" >/dev/null 2>&1 || { echo "missing tool: $1" >&2; exit 2; }
 }
-require age
-require date
+
+ensure_config_dir() {
+  mkdir -p "$CONFIG_DIR" && chmod 0700 "$CONFIG_DIR"
+}
+
+parse_append_args() {
+  ACTION=""; CLIENT=""; ENVL="${ENV:-prod}"; PROVIDER="${PROVIDER:-upcloud}"; NOTE=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --action|--client|--env|--provider|--note)
+        [[ $# -ge 2 ]] || { echo "$1 requires a value" >&2; return 1; }
+        case "$1" in
+          --action)   ACTION="$2" ;;
+          --client)   CLIENT="$2" ;;
+          --env)      ENVL="$2" ;;
+          --provider) PROVIDER="$2" ;;
+          --note)     NOTE="$2" ;;
+        esac
+        shift 2
+        ;;
+      *) echo "unknown arg: $1" >&2; return 1 ;;
+    esac
+  done
+  [[ -n "$ACTION" ]] || { echo "--action required" >&2; return 1; }
+}
+
+append_record() {
+  ensure_config_dir || return 2
+  require age
+  require date
+  require python3
+
+  if [[ ! -f "$AGE_KEY" ]]; then
+    echo "missing age key at $AGE_KEY — operator workstation not bootstrapped" >&2
+    return 2
+  fi
+  recipient="$(grep -m1 '^# public key:' "$AGE_KEY" | awk '{print $4}')"
+  [[ -n "$recipient" ]] || { echo "could not parse age recipient from $AGE_KEY" >&2; return 2; }
+
+  actor="${AUDIT_ACTOR:-$(whoami)@$(hostname -s)}"
+  ts="$(date -u +%s)"
+  iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  record="$(python3 - "$ts" "$iso" "$actor" "$ACTION" "$CLIENT" "$ENVL" "$PROVIDER" "$NOTE" <<'PY'
+import json
+import sys
+
+ts, iso, actor, action, client, env, provider, note = sys.argv[1:]
+print(json.dumps({
+  "ts": int(ts), "iso": iso, "actor": actor,
+  "action": action, "client": client or None,
+  "env": env, "provider": provider,
+  "note": note or None,
+}, sort_keys=True))
+PY
+)"
+  {
+    printf '%s\n' "$record" | age -a -r "$recipient"
+  } >> "$LOG_FILE"
+  chmod 0600 "$LOG_FILE"
+  echo "audit: ${ACTION} ${CLIENT:-<no-client>} → ${LOG_FILE}"
+}
 
 case "$cmd" in
 
   append)
-    ACTION=""; CLIENT=""; ENVL="${ENV:-prod}"; PROVIDER="${PROVIDER:-upcloud}"; NOTE=""
-    while [[ $# -gt 0 ]]; do
-      case "$1" in
-        --action)   ACTION="$2"; shift 2 ;;
-        --client)   CLIENT="$2"; shift 2 ;;
-        --env)      ENVL="$2"; shift 2 ;;
-        --provider) PROVIDER="$2"; shift 2 ;;
-        --note)     NOTE="$2"; shift 2 ;;
-        *) echo "unknown arg: $1" >&2; exit 1 ;;
-      esac
-    done
-    [[ -n "$ACTION" ]] || { echo "--action required" >&2; exit 1; }
+    parse_append_args "$@" || exit 1
+    append_record
+    ;;
 
-    if [[ ! -f "$AGE_KEY" ]]; then
-      echo "missing age key at $AGE_KEY — operator workstation not bootstrapped" >&2
-      exit 2
+  append-best-effort)
+    if ! parse_append_args "$@"; then
+      echo "(warn) audit-log append skipped; invalid arguments" >&2
+      exit 0
     fi
-    recipient="$(grep -m1 '^# public key:' "$AGE_KEY" | awk '{print $4}')"
-    [[ -n "$recipient" ]] || { echo "could not parse age recipient from $AGE_KEY" >&2; exit 2; }
-
-    actor="${AUDIT_ACTOR:-$(whoami)@$(hostname -s)}"
-    ts="$(date -u +%s)"
-    iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    record="$(python3 -c "
-import json, sys, os
-print(json.dumps({
-  'ts': int('$ts'), 'iso': '$iso', 'actor': '$actor',
-  'action': '$ACTION', 'client': '$CLIENT' or None,
-  'env': '$ENVL', 'provider': '$PROVIDER',
-  'note': '$NOTE' or None,
-}, sort_keys=True))
-")"
-    {
-      printf '%s\n' "$record" | age -a -r "$recipient"
-    } >> "$LOG_FILE"
-    chmod 0600 "$LOG_FILE"
-    echo "audit: ${ACTION} ${CLIENT:-<no-client>} → ${LOG_FILE}"
+    if ! command -v age >/dev/null 2>&1 || [[ ! -f "$AGE_KEY" ]]; then
+      [[ "${AUDIT_LOG_DEBUG:-0}" == "1" ]] && \
+        echo "(warn) audit-log append skipped; age or key unavailable" >&2
+      exit 0
+    fi
+    append_record || echo "(warn) audit-log append failed; continuing" >&2
     ;;
 
   read)
+    require age
     if [[ ! -f "$LOG_FILE" ]]; then
       echo "no audit log yet at ${LOG_FILE}" >&2
       exit 0
@@ -110,7 +148,7 @@ PY
     ;;
 
   *)
-    echo "unknown subcommand: $cmd  (expected: append | read)" >&2
+    echo "unknown subcommand: $cmd  (expected: append | append-best-effort | read)" >&2
     exit 1
     ;;
 esac

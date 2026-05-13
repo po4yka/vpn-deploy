@@ -22,6 +22,8 @@ if [[ -z "$NAME" ]]; then
 fi
 
 ENV="${ENV:-prod}"
+PROVIDER="${PROVIDER:-upcloud}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SOPS_FILE="${SOPS_FILE:-${HOME}/.config/vpn-provision/${ENV}.secrets.sops.yaml}"
 
 if [[ ! -f "$SOPS_FILE" ]]; then
@@ -99,6 +101,12 @@ To remove this client later: sops --set '...' to delete the matching entries
 in xray.clients / hysteria.clients / amneziawg_secrets.peers and run
   make rotate-credentials.
 EOF
+
+ENV="$ENV" PROVIDER="$PROVIDER" \
+  "${REPO_ROOT}/scripts/audit-log.sh" append-best-effort \
+    --action new-client \
+    --client "$NAME" \
+    --note "emit_uri=${EMIT_URI} awg_allowed_ips=${AWG_ALLOWED_IPS}"
 
 if [[ "$EMIT_URI" == "1" ]]; then
   echo
