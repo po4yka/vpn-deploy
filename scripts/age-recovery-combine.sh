@@ -28,7 +28,7 @@ Paste your $T shares, one per line. Each share starts with a number and a dash
 
 EOF
 
-KEY="$(ssss-combine -t "$T" -Q)"
+KEY="$(ssss-combine -t "$T" -Q 2>&1)"
 
 if [[ "$KEY" != AGE-SECRET-KEY-* ]]; then
   echo "reconstruction did not produce a valid age secret key" >&2

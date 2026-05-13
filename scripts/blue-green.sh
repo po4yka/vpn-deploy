@@ -11,11 +11,31 @@
 #
 # Optional:
 #   GREEN_ZONE  override zone for the green node (default: same as blue)
+#   DRY_RUN     set to 1 (or pass --dry-run) to print plan without mutating
 set -euo pipefail
 
+DRY_RUN=0
+
+# Parse flags before consuming positional env vars so callers can do either
+# BLUE_ENV=x GREEN_ENV=y scripts/blue-green.sh --dry-run  or use env vars.
+_remaining_args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)        DRY_RUN=1; shift ;;
+    --blue-env)       BLUE_ENV="$2"; shift 2 ;;
+    --green-env)      GREEN_ENV="$2"; shift 2 ;;
+    --provider)       PROVIDER="$2"; shift 2 ;;
+    --green-zone)     GREEN_ZONE="$2"; shift 2 ;;
+    -h|--help)
+      sed -n '2,/^set -euo/p' "$0" | sed '$d' >&2
+      exit 0 ;;
+    *) _remaining_args+=("$1"); shift ;;
+  esac
+done
+
 PROVIDER="${PROVIDER:-upcloud}"
-BLUE_ENV="${BLUE_ENV:?BLUE_ENV required}"
-GREEN_ENV="${GREEN_ENV:?GREEN_ENV required}"
+BLUE_ENV="${BLUE_ENV:?BLUE_ENV required (env var or --blue-env)}"
+GREEN_ENV="${GREEN_ENV:?GREEN_ENV required (env var or --green-env)}"
 GREEN_ZONE="${GREEN_ZONE:-}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TF_DIR="${REPO_ROOT}/terraform/providers/${PROVIDER}"
@@ -25,6 +45,28 @@ SECRETS_FILE="/tmp/vpn-${BLUE_ENV}.secrets.yaml"
 if [[ "${BLUE_ENV}" == "${GREEN_ENV}" ]]; then
   echo "BLUE_ENV and GREEN_ENV must differ" >&2
   exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Dry-run mode: print planned sequence, no mutations, exit 0.
+# ---------------------------------------------------------------------------
+if (( DRY_RUN )); then
+  cat <<EOF
+[dry-run] blue-green sequence for PROVIDER=${PROVIDER} BLUE_ENV=${BLUE_ENV} GREEN_ENV=${GREEN_ENV}
+
+  1/8  Verify blue health  (sops --decrypt, make verify) — read-only
+  2/8  Bootstrap green tfvars if missing  (scripts/new-cohort.sh)
+  3/8  terraform plan -chdir=${TF_DIR} -var-file=environments/${GREEN_ENV}.tfvars
+  4/8  ansible-playbook ansible/playbooks/site.yml --check -l '*${GREEN_ENV}*'
+  5/8  ansible-playbook ansible/playbooks/verify.yml --check -l '*${GREEN_ENV}*'
+       ansible-playbook ansible/playbooks/smoke-test.yml --check -l '*${GREEN_ENV}*'
+  6/8  Operator pivot (traffic swing) — manual step
+  7/8  Drain blue — no automation
+  8/8  Promote green tfvars — manual step
+
+[dry-run] no terraform apply, no ansible changes, no audit-log writes, no sops mutations
+EOF
+  exit 0
 fi
 
 if [[ -z "${ANSIBLE_SSH_PRIVATE_KEY_FILE:-}" ]]; then
