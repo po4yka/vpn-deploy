@@ -1,0 +1,58 @@
+---
+name: image-scan
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  enumerate-images:
+    name: enumerate base images
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.images.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Collect base images from molecule scenarios
+        id: images
+        run: |
+          images=$(grep -rh 'image:' ansible/roles/*/molecule/*/molecule.yml \
+            | awk '{print $2}' \
+            | grep -v '^true$' \
+            | sort -u \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "matrix=${images}" >> "$GITHUB_OUTPUT"
+
+  scan:
+    name: trivy (${{ matrix.image }})
+    needs: enumerate-images
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJson(needs.enumerate-images.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@6e7b7d1fd3e4fef0c5fa8cce1229c54b2c9bd0d8  # v0.31.0
+        with:
+          image-ref: ${{ matrix.image }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: sarif
+          output: trivy-results.sarif
+          trivyignores: .trivyignore
+
+      - name: Upload Trivy SARIF results
+        if: always()
+        uses: github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e  # v4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-${{ matrix.image }}

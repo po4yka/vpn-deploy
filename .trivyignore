@@ -1,0 +1,24 @@
+# .trivyignore — Trivy vulnerability allow-list
+#
+# Format: one CVE ID per line (e.g. CVE-2024-12345).
+# Blank lines and lines starting with '#' are ignored.
+#
+# Allow-list policy:
+#   Before adding an entry, document:
+#     - CVE ID
+#     - Rationale: why this finding is acceptable (e.g. not reachable in
+#       molecule test context, OS vendor won't fix, mitigated elsewhere)
+#     - Expiry: date after which this entry must be re-evaluated (ISO 8601)
+#     - Owner: who approved the exception
+#
+# Example entry (do not uncomment without review):
+#   # CVE-2024-99999
+#   # Rationale: affects libfoo only when compiled with --enable-bar,
+#   #            which the distro package does not do.
+#   # Expiry: 2026-11-01
+#   # Owner: pochaev.nik@gmail.com
+#   CVE-2024-99999
+#
+# Reference: https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/#trivyignore
+#
+# No entries yet. Add only after operator review and with the fields above.
