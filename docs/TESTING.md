@@ -43,8 +43,13 @@ real VPS. This doc enumerates each layer and where coverage gaps exist
 | **Pinned-binary reproducibility** | **`.github/workflows/reproducible-build.yml`** (CI) | go build + sha256 compare | n/a | Three jobs: xray (from-source rebuild → soft-warn on bytewise drift), hysteria (hard-fail on release-asset sha256 mismatch), RealiTLScanner (same). |
 | **Real-VPS end-to-end** | **`.github/workflows/real-vps-deploy.yml`** (workflow_dispatch / `ci-real-deploy` label) | provision → site.yml → verify → destroy | n/a | Approximates production deploy as closely as Actions allows. Ephemeral UpCloud VPS per run. Does not currently run smoke-test. See `docs/CI-REAL-DEPLOY.md`. |
 | **Kill-switch validation** | **`scripts/check-singbox-killswitch.py`** (operator-driven) | static JSON analysis | n/a | Verifies auto_route + strict_route, route.final ≠ direct, DNS detour ≠ direct, no IPv6-only outbounds. |
-| **vpnd Rust crate (110 tests)** | `cargo clippy --release --all-targets -- -D warnings` (CI) | n/a | `cargo test --release` (CI, blocking) | Covers runner builders (process, make, ansible, terraform, sops), config discovery, secrets parsing, registry round-trip, QR encode, update-cache, completions snapshot, ai-docs emit, host CRUD, doctor bundle, share bundle. |
-| **Python unit tests (118 tests, 1 skip)** | pytest (CI) | n/a | n/a | Covers orchestrator dry-runs (blue-green, fleet-rotate, restore), age-recovery round-trip, emit-singbox, SOPS round-trip, render-inventory, relay/fallback, subscription token revocation lifecycle, tspu-canary, scan-reality-targets, singbox kill-switch. |
+| **vpnd Rust crate (114 tests)** | `cargo clippy --release --all-targets -- -D warnings` (CI) | n/a | `cargo test --release` (CI, blocking) | Covers runner builders (process, make, ansible, terraform, sops), config discovery, secrets parsing, registry round-trip, QR encode, update-cache, completions snapshot, ai-docs emit, host CRUD, doctor bundle, share bundle. Plus 4 proptest properties for `urlencode` round-trip and `redact_secrets` per-line invariants. |
+| **vpnd mutation testing (weekly)** | `cargo mutants` (`.github/workflows/mutants.yml`) | n/a | n/a | Scheduled Monday 08:00 UTC. Targets `src/runner/**`, `src/commands/doctor.rs`, `src/pages/qr.rs`, `src/secrets.rs`. Non-blocking — surviving mutants posted to a rolling tracking issue with label `automation:mutation-testing`. |
+| **Python unit tests (91 tests, 1 skip)** | pytest (CI) | n/a | n/a | Covers emit-singbox, SOPS round-trip, render-inventory, relay/fallback, subscription token revocation lifecycle, tspu-canary, scan-reality-targets, singbox kill-switch. (Shell orchestrator dry-runs migrated to bats — see below.) |
+| **Shell-orchestrator bats tests (29 tests)** | `bats tests/bats/` (CI, blocking) | n/a | n/a | Covers `blue-green.sh --dry-run`, `fleet-rotate.sh --dry-run`, `age-recovery-combine.sh` 3-of-5 round-trip, `restore.sh --dry-run` (path-A + path-B). Uses the same `tests/stubs/bin/` PATH-prepend harness as the Python tests. bats-support v0.3.0 + bats-assert v2.1.0 vendored under `tests/bats/test_helper/`. |
+| **Terraform policy (cross-provider, Conftest)** | `.github/workflows/tf-policy.yml` per PR | n/a | n/a | Five Rego rules: `every_server_has_metadata_enabled`, `no_secondary_public_ip_without_opt_in`, `no_admin_port_exposed_to_world`, `firewall_rules_pin_ssh_to_documented_cidrs`, `cloud_init_user_data_contains_no_secrets`. Standalone workflow per the layered CI design. `make tf-policy` for local. |
+| **Container image scanning (Trivy)** | `.github/workflows/image-scan.yml` per PR | n/a | n/a | Dynamically enumerates base images from `ansible/roles/*/molecule/*/molecule.yml`. Fails on HIGH/CRITICAL findings. Allow-list via `.trivyignore` with rationale + expiry + owner per entry. SARIF uploaded to Security tab. |
+| **Repo drift (weekly)** | `.github/workflows/drift.yml` | `scripts/drift-since-tag.sh --repo-only` | n/a | Scheduled Monday 12:00 UTC. Diffs the repository against the last known-good tag. Updates a single rolling issue labelled `automation:drift` when drift is detected; silent when clean. Operator-side cron (against live servers) is unchanged and uses the script without `--repo-only`. |
 | **Jinja2 snapshot diff (27 templates)** | `scripts/render-snapshots.py` | golden-file diff | n/a | Fails on any unintended render change. Run `make snapshot-update` after intentional template edits. |
 
 ## Test fixtures and stubs
@@ -74,15 +79,16 @@ exact argument vectors without network or filesystem side-effects.
 Stubs provided: `terraform`, `ansible-playbook`, `sops`, `curl`, `gh`,
 `upcloud`, `hcloud`, `vultr`.
 
-See `tests/stubs/README.md` for the discipline contract and how to add a
-new stub.
+The bats tests under `tests/bats/` use the same `PATH=tests/stubs/bin:$PATH`
+discipline and call the same fixture files. See `tests/stubs/README.md` for
+the discipline contract and how to add a new stub.
 
 ## Test phases mapped to operator workflow
 
 | Operator step | Tests that protect it |
 |---|---|
 | `git commit` (local) | pre-commit hooks: gitleaks, terraform fmt, ansible-lint, yamllint, **shellcheck**, **secrets-coverage**, **templates-render**, **placeholder-scan** |
-| `git push` (PR) | CI matrix: terraform fmt+validate (3 providers), terraform test (3 providers), cloud-init schema, ansible-lint + syntax, required molecule scenarios for baseline/firewall/xray/hysteria/nginx-xhttp/watchdog/monitoring/backup/subscription-host plus watchdog failure, shellcheck, secrets-coverage, templates-render, yamllint, gitleaks, unit tests (118 pytest + 110 Rust), snapshot diff, secrets schema; reproducible-build covers xray + hysteria + RealiTLScanner sha256. |
+| `git push` (PR) | CI matrix: terraform fmt+validate (3 providers), terraform test (3 providers), cloud-init schema, ansible-lint + syntax, required molecule scenarios for baseline/firewall/xray/hysteria/nginx-xhttp/watchdog/monitoring/backup/subscription-host plus watchdog failure, shellcheck, secrets-coverage, templates-render, yamllint, gitleaks, unit tests (91 pytest + 114 Rust + 29 bats), Conftest TF policy (3 providers), Trivy image scan, snapshot diff, secrets schema; reproducible-build covers xray + hysteria + RealiTLScanner sha256. |
 | PR labeled `ci-real-deploy` | **real-vps-deploy** workflow: provisions an ephemeral UpCloud VPS, runs site.yml + verify, destroys — closest approximation to production in CI. See `docs/CI-REAL-DEPLOY.md`. |
 | `make validate` (operator) | terraform fmt + validate + gitleaks + ansible-lint + ansible syntax-check |
 | `make validate-target` | live probe of REALITY target (TLS / H2 / SAN / uTLS / ASN / template OPSEC) |
@@ -90,28 +96,44 @@ new stub.
 | `make dry-run` / `make deploy` / `make verify` | **pre-deploy-check** runs first: spot-check-secrets + check-certs; bypass with `SKIP_PRECHECK=1` |
 | `make deploy` | role handlers run validate-before-restart (Xray, nftables, nginx) |
 | `make verify [TAG_ON_SUCCESS=1]` | post-deploy gates assert services up, listeners present; optionally git-tag the commit as `vpn-deploy-known-good-*` |
-| `make drift-since-tag` | weekly: diff fleet against the last known-good tag (terraform plan + ansible --check) |
+| `make drift-since-tag` | weekly: diff fleet against the last known-good tag (terraform plan + ansible --check). The CI scheduled variant uses `--repo-only` and runs without SOPS access — see `.github/workflows/drift.yml`. |
+| scheduled Monday 08:00 UTC | **cargo-mutants** (`.github/workflows/mutants.yml`) — validates vpnd test suite is doing its job; non-blocking |
+| scheduled Monday 12:00 UTC | **drift-since-tag --repo-only** (`.github/workflows/drift.yml`) — repository-level drift detection; opens/updates a rolling issue |
+| weekly weekend | **Renovate** opens grouped dependency-update PRs (Terraform providers, Rust crates, GitHub Actions digest pins, Xray/Realm/AmneziaWG version pins via regex managers) |
 | `make smoke-test` | end-to-end real-traffic dial through every enabled profile |
 | `make check-killswitch BUNDLE=…` | per-client validation of emitted sing-box bundle (5 rules: auto_route, strict_route, sniff, final ≠ direct, DNS detour ≠ direct, no IPv6-only outbound) |
 
 ## Dependency updates
 
-Pinned versions are not maintained by hand — Dependabot opens weekly PRs
+Pinned versions are not maintained by hand — Renovate opens weekly PRs
 for the ecosystems it supports, and each PR runs through the full CI
 matrix above before a human merges.
 
-| Ecosystem | Dependabot covers? | Where pinned | Refresh cadence |
+Renovate config lives at `renovate.json` at the repo root. Key behaviors:
+
+- `helpers:pinGitHubActionDigests` preset — every Action stays SHA-pinned;
+  Renovate auto-updates digests with the matching version comment preserved.
+- Terraform providers grouped into a single weekly PR; Rust crates grouped
+  the same way (lowers merge overhead).
+- Custom regex managers for `xray_version`, `realm_version`, and
+  `amneziawg_version` in `ansible/roles/*/defaults/main.yml` — each pointed
+  at upstream GitHub Releases. `docs/XRAY-RELEASE-LINE.md` remains the
+  policy SOT; the Renovate PR is the *trigger* for operator review.
+- `vulnerabilityAlerts.enabled: true`. Schedule: weekly on weekends.
+
+| Ecosystem | Renovate covers? | Where pinned | Refresh cadence |
 |---|---|---|---|
-| GitHub Actions | yes | `.github/workflows/*.yml` | weekly (Mon 09:00 UTC, grouped) |
-| Terraform providers | yes | `terraform/providers/*/versions.tf` + `.terraform.lock.hcl` | weekly per provider directory |
-| Python tooling | yes | `requirements.txt` | weekly, grouped (ansible-core / ansible-lint / molecule / yamllint / jmespath) |
-| Ansible Galaxy collections | **no** | exact versions in `requirements.yml` | manual quarterly review (see below) |
-| Xray / Hysteria binaries | n/a (runtime only) | `secrets/prod.secrets.example.yaml` schema documents version + sha256 fields | operator decides per release; see `docs/RUNBOOK-rotate.md` |
+| GitHub Actions (digests) | yes | `.github/workflows/*.yml` | weekly, one PR per Action |
+| Terraform providers | yes | `terraform/providers/*/versions.tf` + `.terraform.lock.hcl` | weekly, grouped |
+| Rust crates | yes | `vpnd/Cargo.toml` + `vpnd/Cargo.lock` | weekly, grouped |
+| Python tooling | yes | `requirements.txt` | weekly, grouped |
+| Xray / Realm / AmneziaWG binaries | yes (via regex managers) | `ansible/roles/*/defaults/main.yml` | per upstream release; operator merges against `docs/XRAY-RELEASE-LINE.md` policy |
+| Ansible Galaxy collections | **no** (Renovate gap) | exact versions in `requirements.yml` | manual quarterly review (see below) |
 | geodata (geosite/geoip) | n/a | concrete URLs + sha256 values in the deployed vars file | daily systemd timer on the VPS via `geodata` role |
 
 ### Manual quarterly Galaxy collection refresh
 
-Dependabot does not yet support Ansible Galaxy. Once a quarter, run:
+Renovate does not yet support Ansible Galaxy. Once a quarter, run:
 
 ```bash
 # Inspect current pins
@@ -131,9 +153,42 @@ make molecule-test ROLE=baseline
 # Commit with: chore(deps): refresh Ansible Galaxy collections
 ```
 
-Auto-merge is intentionally **not** enabled for any Dependabot PR — every
+Auto-merge is intentionally **not** enabled for any Renovate PR — every
 update goes through a human review. Operators who want auto-merge can
 configure it per-ecosystem in repo Settings.
+
+## Build attestation (SLSA Level 3)
+
+Every released `vpnd` binary ships with a Sigstore-signed SLSA-v1.0 Build
+Level 3 provenance attestation generated by `actions/attest-build-provenance`
+from `.github/workflows/release-vpnd.yml`. The attestation proves the binary
+came from this repo's trusted build workflow on a specific commit SHA.
+
+Verify a downloaded binary:
+
+```bash
+gh attestation verify ./vpnd-x86_64-unknown-linux-gnu \
+  --owner po4yka --signer-workflow .github/workflows/release-vpnd.yml
+```
+
+`scripts/install-vpnd.sh` calls this automatically when `gh` is on PATH and
+`VPND_SKIP_ATTESTATION` is unset. The script warns and continues if `gh` is
+missing — set `VPND_SKIP_ATTESTATION=1` to opt out explicitly.
+
+## Pre-commit hooks
+
+Local pre-commit configuration (`.pre-commit-config.yaml`) catches common
+issues before CI cycles:
+
+- `terraform_fmt`, `terraform_docs`, `terraform_tflint` via
+  `antonbabenko/pre-commit-terraform` — Terraform formatting, auto-generated
+  per-provider README, and security linting.
+- `cargo-clippy` (local hook) — workspace warnings-as-errors for vpnd.
+- `prettier` scoped to JSON files in `tests/fixtures/` and `secrets/schema.json`
+  only — does not touch markdown or vendored package.json files.
+
+Generated `terraform/providers/<name>/README.md` files are committed; the
+`terraform_docs` hook keeps them in sync on every commit.
 
 ## What is intentionally NOT tested
 
