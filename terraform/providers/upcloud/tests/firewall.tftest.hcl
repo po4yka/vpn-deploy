@@ -140,7 +140,7 @@ run "firewall_skips_xhttp_port_when_equal_to_443" {
     condition = length([
       for r in upcloud_firewall_rules.vpn.firewall_rule :
       r if startswith(r.comment, "TCP/443 VLESS+REALITY")
-    ]) == 2 && length([
+      ]) == 2 && length([
       for r in upcloud_firewall_rules.vpn.firewall_rule :
       r if r.comment == "TCP/443 nginx-xhttp"
     ]) == 0

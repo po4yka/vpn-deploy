@@ -103,11 +103,18 @@
         - /tmp/gopath
         - /root/.cache/go-build
 
+- name: Read caddy-naive capabilities
+  ansible.builtin.command:
+    cmd: getcap /usr/local/bin/caddy-naive
+  register: naive_caddy_capabilities
+  changed_when: false
+  failed_when: naive_caddy_capabilities.rc not in [0, 1]
+
 - name: Allow caddy-naive to bind to 443
-  community.general.capabilities:
-    path: /usr/local/bin/caddy-naive
-    capability: cap_net_bind_service+ep
-    state: present
+  ansible.builtin.command:
+    cmd: setcap cap_net_bind_service=+ep /usr/local/bin/caddy-naive
+  when: "'cap_net_bind_service=ep' not in naive_caddy_capabilities.stdout"
+  changed_when: true
 
 - name: Drop TLS cert + key
   ansible.builtin.copy:
