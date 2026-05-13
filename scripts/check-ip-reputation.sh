@@ -5,7 +5,7 @@
 #
 # Lists consulted:
 #   Spamhaus DROP / EDROP (DNS RBL: zen.spamhaus.org)
-#   FireHOL Level 1 IP set (HTTPS; cached 24 h)
+#   FireHOL Level 1 IP set (optional local netset via FIREHOL_NETSET_FILE)
 #   AbuseIPDB confidence-of-abuse score (HTTPS; needs ABUSEIPDB_KEY)
 #
 # On finding, exits 1 and (when ntfy is configured) sends an alert.
@@ -55,14 +55,13 @@ if [[ -n "$spam_resp" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# FireHOL Level 1 — daily-refreshed IP set; download once a day.
+# FireHOL Level 1 — optional local IP set. CI/CD policy forbids this script
+# from downloading and trusting a mutable external netset at runtime; operators
+# who want this check should refresh the file out-of-band and point to it.
 # ---------------------------------------------------------------------------
-fh_cache="${CACHE_DIR}/firehol_level1.netset"
-fh_url="https://iplists.firehol.org/files/firehol_level1.netset"
-if [[ ! -f "$fh_cache" ]] || [[ -n "$(find "$fh_cache" -mtime +1 -print 2>/dev/null)" ]]; then
-  curl -fsSL --max-time 30 -o "${fh_cache}.tmp" "$fh_url" \
-    && mv "${fh_cache}.tmp" "$fh_cache" \
-    || echo "(warning) failed to refresh FireHOL list; using cached copy" >&2
+fh_cache="${FIREHOL_NETSET_FILE:-${CACHE_DIR}/firehol_level1.netset}"
+if [[ ! -f "$fh_cache" ]]; then
+  echo "  (info) FireHOL netset not present; set FIREHOL_NETSET_FILE to enable that check" >&2
 fi
 if [[ -f "$fh_cache" ]] && python3 -c "
 import ipaddress, pathlib, sys

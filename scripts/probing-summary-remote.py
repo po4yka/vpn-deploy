@@ -19,8 +19,6 @@ import os
 import pathlib
 import re
 import sys
-from typing import Iterable
-
 WINDOW_HOURS = 7 * 24
 NOW = dt.datetime.now(tz=dt.timezone.utc)
 SINCE = NOW - dt.timedelta(hours=WINDOW_HOURS)

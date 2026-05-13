@@ -53,6 +53,7 @@ paths = [
     '''README\.md''',
     '''.*\.example\..*''',
     '''ansible/roles/.*/molecule/.*''',
+    '''ansible/molecule/.*''',
     '''scripts/new-client\.sh''',
     '''scripts/emit-singbox\.sh''',
 ]

@@ -109,7 +109,8 @@ def check_cert_pem(pem: str, key_pem: str | None, path: str, f: Findings) -> Non
                 ["openssl", "x509", "-noout", "-modulus"],
                 input=pem.encode(), capture_output=True, check=True,
             ).stdout.decode().strip()
-            # try RSA first, then EC
+            # RSA modulus comparison is only a heuristic; unsupported key
+            # types are accepted by the certificate parser above.
             key_mod_cmd = ["openssl", "rsa", "-noout", "-modulus"]
             key_mod = subprocess.run(
                 key_mod_cmd, input=key_pem.encode(),
@@ -118,6 +119,7 @@ def check_cert_pem(pem: str, key_pem: str | None, path: str, f: Findings) -> Non
             if key_mod.returncode == 0 and key_mod.stdout.strip() != cert_mod.encode():
                 f.add(path, "RSA cert modulus does not match key modulus")
         except subprocess.CalledProcessError:
+            # Non-RSA or unsupported pairs skip the modulus-only heuristic.
             pass
 
 

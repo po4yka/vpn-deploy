@@ -26,7 +26,7 @@
       ansible.builtin.stat:
         path: /var/lib/vpn-subscription
       register: payload_dir
-      failed_when: payload_dir.stat.mode != "0750"
+      failed_when: payload_dir.stat.mode != "0700"
 
     # State-level: prove the role left the host in a serving state, not
     # merely that the config files were rendered.

@@ -19,7 +19,7 @@ symptom; cross-reference the linked runbook for the recovery procedure.
 | watchdog alerts with `class=tcp_listen_wedge` | Xray hung | `systemctl restart xray`; if recurring, check `vpn.xray_flow_mode` cohort match |
 | watchdog alerts with `class=nginx_403_spike` | Probe/scrape wave | usually benign; if rate climbs, `make check-ip-reputation` to see if IP appeared on a public blocklist |
 | `make asn-drift` alert | Provider IP reassignment | check `docs/PROVIDER-NOTES.md` — if new ASN is in Avoid tier, blue-green now |
-| `make check-ip-reputation` alert | IP on Spamhaus / FireHOL | blue-green or wait out the listing depending on which list and severity score |
+| `make check-ip-reputation` alert | IP on Spamhaus / optional FireHOL netset | blue-green or wait out the listing depending on which list and severity score |
 | Operator workstation compromised | Operator | rotate SSH key + age key + REALITY key + restic password; full credential rotation; `make audit-log` shows every issuance from the compromised workstation |
 | Lost SSH access (key deleted) | Operator | see § "Lost SSH access" below |
 | Lost SOPS age private key | Operator | see § "Lost age key" below; if Shamir-split (`docs/AGE-RECOVERY.md`) or YubiKey-backed (`docs/SECRETS.md`), reconstruct first |

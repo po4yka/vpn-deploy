@@ -54,9 +54,7 @@ jobs:
       matrix:
         include:
           - distro: debian13
-            template_secret_name: CI_UPCLOUD_TEMPLATE_UUID
           - distro: ubuntu2404
-            template_secret_name: CI_UPCLOUD_TEMPLATE_UUID_UBUNTU24
 
     name: real-vps-deploy (${{ matrix.distro }})
     # Distinct group per distro so a Debian fan-out can run alongside an
@@ -71,10 +69,11 @@ jobs:
       UPCLOUD_PASSWORD: ${{ secrets.UPCLOUD_PASSWORD }}
       ANSIBLE_HOST_KEY_CHECKING: "False"
       MATRIX_DISTRO: ${{ matrix.distro }}
-      MATRIX_TEMPLATE_UUID: ${{ secrets[matrix.template_secret_name] }}
+      CI_UPCLOUD_TEMPLATE_UUID_DEBIAN13: ${{ secrets.CI_UPCLOUD_TEMPLATE_UUID }}
+      CI_UPCLOUD_TEMPLATE_UUID_UBUNTU24: ${{ secrets.CI_UPCLOUD_TEMPLATE_UUID_UBUNTU24 }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
         with:
           persist-credentials: false
 
@@ -87,10 +86,26 @@ jobs:
       - name: Short-circuit when this matrix entry has no template UUID
         id: gate
         run: |
+          case "${MATRIX_DISTRO}" in
+            debian13)
+              MATRIX_TEMPLATE_UUID="${CI_UPCLOUD_TEMPLATE_UUID_DEBIAN13}"
+              template_secret_name="CI_UPCLOUD_TEMPLATE_UUID"
+              ;;
+            ubuntu2404)
+              MATRIX_TEMPLATE_UUID="${CI_UPCLOUD_TEMPLATE_UUID_UBUNTU24}"
+              template_secret_name="CI_UPCLOUD_TEMPLATE_UUID_UBUNTU24"
+              ;;
+            *)
+              echo "::error::Unknown matrix distro: ${MATRIX_DISTRO}"
+              exit 1
+              ;;
+          esac
           if [ -z "${MATRIX_TEMPLATE_UUID:-}" ]; then
-            echo "::notice::${MATRIX_DISTRO} has no template UUID configured (secret ${{ matrix.template_secret_name }} is empty) — skipping this matrix entry."
+            echo "::notice::${MATRIX_DISTRO} has no template UUID configured;"
+            echo "::notice::secret ${template_secret_name} is empty — skipping this matrix entry."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
+            echo "MATRIX_TEMPLATE_UUID=${MATRIX_TEMPLATE_UUID}" >> "$GITHUB_ENV"
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -112,11 +127,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-pip jq age
-          curl -fsSL "https://github.com/getsops/sops/releases/download/v3.9.0/sops-v3.9.0.linux.amd64" -o /usr/local/bin/sops
-          sudo install -m 0755 /usr/local/bin/sops /usr/local/bin/sops
+          curl -fsSL "https://github.com/getsops/sops/releases/download/v3.9.0/sops-v3.9.0.linux.amd64" -o /tmp/sops
+          echo "0d65660fbe785647ff4f1764d7f69edf598f79d6d79ebbef4a501909b6ff6b82  /tmp/sops" | sha256sum -c -
+          sudo install -m 0755 /tmp/sops /usr/local/bin/sops
           curl -fsSL "https://releases.hashicorp.com/terraform/1.9.5/terraform_1.9.5_linux_amd64.zip" -o /tmp/tf.zip
+          echo "9cf727b4d6bd2d4d2908f08bd282f9e4809d6c3071c3b8ebe53558bee6dc913b  /tmp/tf.zip" | sha256sum -c -
           (cd /tmp && unzip -o tf.zip && sudo install -m 0755 terraform /usr/local/bin/terraform)
-          pip3 install --user 'ansible-core>=2.19'
+          pip3 install --user --require-hashes --no-deps -r requirements.txt
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Stage SSH key + age key + CI tfvars
@@ -172,7 +189,9 @@ jobs:
           export SKIP_PRECHECK=1
           # Disable roles whose runtime needs a real upstream or
           # platform feature CI can't reproduce.
-          export ANSIBLE_EXTRA_VARS="vpn.enable_amneziawg=false vpn.enable_geodata=false vpn.enable_backup=false vpn.enable_monitoring=false vpn.enable_warp_outbound=false vpn.enable_honeypot=false vpn.enable_probe_ratelimit=false"
+          export ANSIBLE_EXTRA_VARS="vpn.enable_amneziawg=false vpn.enable_geodata=false vpn.enable_backup=false"
+          ANSIBLE_EXTRA_VARS="${ANSIBLE_EXTRA_VARS} vpn.enable_monitoring=false vpn.enable_warp_outbound=false"
+          ANSIBLE_EXTRA_VARS="${ANSIBLE_EXTRA_VARS} vpn.enable_honeypot=false vpn.enable_probe_ratelimit=false"
           make init plan apply inventory wait
           VPN_SECRETS_FILE=$SECRETS_FILE \
             ansible-playbook ansible/playbooks/site.yml --extra-vars "$ANSIBLE_EXTRA_VARS"

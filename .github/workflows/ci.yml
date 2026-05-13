@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   gitleaks:
     name: gitleaks
@@ -106,7 +110,7 @@ jobs:
         working-directory: ansible
         env:
           ANSIBLE_CONFIG: ./ansible.cfg
-        run: ansible-lint
+        run: ansible-lint --offline
 
       - name: ansible-playbook --syntax-check
         working-directory: ansible
@@ -214,8 +218,6 @@ jobs:
           python-version: "3.12"
       - name: Install pinned tooling
         run: pip install --require-hashes --no-deps -r requirements.txt
-      - name: Install pytest (test-only, version-pinned)
-        run: pip install pytest==8.4.0
       - name: pytest tests/unit/
         run: python3 -m pytest tests/unit/ -v
 

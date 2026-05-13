@@ -135,6 +135,7 @@ if [[ -n "${!classes[*]}" ]] \
 fi
 
 result_text="$(printf '%s\n' "${probe_results[@]}")"
+class_summary="${!classes[*]}"
 
 # Build class block for the alert body + ntfy tag list.
 class_lines=""
@@ -149,7 +150,7 @@ if (( should_alert )); then
   if [[ -n "$fail_list" ]]; then
     title="VPN[$HOSTNAME] failing: ${fail_list}"
   else
-    title="VPN[$HOSTNAME] class signal: ${!classes[*]}"
+    title="VPN[$HOSTNAME] class signal: ${class_summary}"
   fi
   body="consecutive_fails=${STATE[consecutive_fails]}
 ${class_lines}${result_text}"
@@ -191,7 +192,7 @@ fi
 chmod 0640 "$STATE_FILE"
 
 # Always log to journal so `journalctl -u vpn-watchdog.service` shows status
-echo "watchdog: consecutive_fails=${STATE[consecutive_fails]} alerts_this_hour=${STATE[alerts_this_hour]} classes=${!classes[*]:-none}"
+echo "watchdog: consecutive_fails=${STATE[consecutive_fails]} alerts_this_hour=${STATE[alerts_this_hour]} classes=${class_summary:-none}"
 printf '%s\n' "${probe_results[@]}"
 if [[ -n "${!classes[*]}" ]]; then
   printf '%s' "$class_lines"

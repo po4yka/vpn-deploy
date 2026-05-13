@@ -57,6 +57,11 @@ jobs:
             "secrets-coverage",
             "templates-render",
             "yamllint",
+            "pytest unit tests",
+            "jinja snapshot diff",
+            "secrets schema (lenient on example)",
+            "terraform test (mock_provider)",
+            "molecule failure (watchdog)",
             "codeql (python)",
             "codeql (actions)"
           ]')

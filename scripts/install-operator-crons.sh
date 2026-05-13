@@ -15,7 +15,7 @@
 # What gets installed:
 #   */30 *  burn-check                catches IP-burn within 30 min
 #   @daily  asn-drift                 alerts on ASN reassignment
-#   @daily  check-ip-reputation       Spamhaus / FireHOL / AbuseIPDB
+#   @daily  check-ip-reputation       Spamhaus / optional FireHOL file / AbuseIPDB
 #   */2 *   watch-spare               (only when warm-spare ENV set)
 #   @daily  tspu-canary               TSPU rule-drift probes
 #   @daily  probing-summary           7-day rollup

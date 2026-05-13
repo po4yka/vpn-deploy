@@ -13,6 +13,5 @@ PyYAML==6.0.3
 Jinja2==3.1.6
 referencing<0.37
 
-# pytest is NOT pinned here — it's not part of the deploy runtime;
-# the ci-fast job installs pytest separately with an explicit
-# version, so Scorecard's pinned-dependencies rule still passes.
+# Test-only; installed from the hash-pinned lock in CI.
+pytest==8.4.0

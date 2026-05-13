@@ -85,7 +85,7 @@ help:
 	@echo "── OBSERVABILITY / DEFENSIVE ──────────────────────────────────────────"
 	@echo "  burn-check                 External IP reachability probe"
 	@echo "  asn-drift                  Alert on VPS ASN reassignment"
-	@echo "  check-ip-reputation        Spamhaus / FireHOL / AbuseIPDB"
+	@echo "  check-ip-reputation        Spamhaus / optional FireHOL file / AbuseIPDB"
 	@echo "  probing-summary            7-day Xray/nginx/honeypot rollup"
 	@echo "  tspu-canary                Daily TSPU rule-drift probes (in-cohort box)"
 	@echo "  test-tls-policing HOST=…   Probe the ~12-concurrent-TLS home-ISP rule"
