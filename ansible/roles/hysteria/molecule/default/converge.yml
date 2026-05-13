@@ -50,22 +50,12 @@
             done
           fi
           exit 0
-    - name: Stub /usr/local/bin/hysteria
-      ansible.builtin.copy:
-        dest: /usr/local/bin/hysteria
-        owner: root
-        group: root
-        mode: "0755"
-        content: |
-          #!/bin/sh
-          if [ "$1" = "server" ]; then
-            trap 'exit 0' TERM INT
-            while true; do
-              sleep 3600 &
-              wait $!
-            done
-          fi
-          exit 0
+    # Note: do NOT stub /usr/local/bin/hysteria here. The role's
+    # `Link hysteria into local bin` task creates that path as a symlink
+    # to {{ hysteria_install_root }}/current/hysteria. Pre-staging it as
+    # a regular file makes the role's symlink task non-idempotent (it
+    # converts file→link on every run).
+
     - name: Pre-create system user (the role itself does this; molecule pre_tasks short-circuit get_url)
       ansible.builtin.user:
         name: hysteria
