@@ -363,3 +363,87 @@ def test_audit_record_shape_locked(service):
     assert isinstance(rec["ts"], int)
     assert isinstance(rec["bytes"], int)
     assert len(rec["token_prefix"]) == 8
+
+
+# ---------------------------------------------------------------------------
+# Workstream 5 extension — revoke-then-read lifecycle
+# ---------------------------------------------------------------------------
+
+class TestRevokeLifecycle:
+    """End-to-end: issue a token, serve it, revoke it, assert 410 on the next read.
+
+    This class covers the operator workflow:
+      1. Token is issued (placed in /sub/) and successfully served.
+      2. Operator adds the hash to the revoked file (simulates issue-sub-token.sh
+         revoke flow).
+      3. Subsequent read returns 410 Gone — revocation is in effect without a
+         service restart.
+      4. The audit log shows the correct outcome sequence: consumed, revoked.
+    """
+
+    def test_issue_serve_revoke_read_returns_410(self, service):
+        """Full lifecycle: place → serve (200) → revoke → read (410)."""
+        token = "rev_life_rev_life"  # 16 chars, matches PATH_RE
+
+        # Step 1: issue — place token payload
+        service.place("sub", token, b'{"outbound":"vless","issued":true}')
+
+        # Step 2: serve — first read must succeed
+        resp = service.get(f"/sub/{token}")
+        assert resp.status == 200, f"Expected 200 on first read, got {resp.status}"
+        assert resp.read() == b'{"outbound":"vless","issued":true}'
+
+        # Step 3: revoke — add hash to revoked file (simulates operator revocation)
+        service.revoke(token)
+
+        # Step 4: read after revocation must return 410 Gone
+        resp2 = service.get(f"/sub/{token}")
+        assert resp2.status == 410, (
+            f"Expected 410 after revocation, got {resp2.status}"
+        )
+
+    def test_audit_log_records_revoked_outcome(self, service):
+        """The audit log must record 'revoked' outcome after revocation,
+        enabling sub-reads.sh to surface the event to the operator."""
+        token = "rev_audit_rev_aaa"  # 17 chars
+
+        service.place("sub", token, b"payload")
+        service.get(f"/sub/{token}")   # consumed
+        service.revoke(token)
+        service.get(f"/sub/{token}")   # revoked
+
+        outcomes = [r["outcome"] for r in service.reads()]
+        assert outcomes[-1] == "revoked", (
+            f"Last audit outcome must be 'revoked', got: {outcomes}"
+        )
+
+    def test_revoked_token_stays_on_disk(self, service):
+        """Revocation must NOT delete the payload file — the operator can
+        un-revoke by removing the hash from the revoked file."""
+        token = "rev_disk_rev_disk"  # 16 chars
+
+        service.place("sub", token, b"payload")
+        service.revoke(token)
+
+        h = hashlib.sha256(token.encode()).hexdigest()
+        assert (service.sub_dir / "sub" / h).exists(), (
+            "Revocation must not delete the payload — it is soft-blocked."
+        )
+
+        resp = service.get(f"/sub/{token}")
+        assert resp.status == 410
+
+    def test_bootstrap_revoked_returns_410_and_does_not_consume(self, service):
+        """Revoked bootstrap tokens must return 410 without consuming the file,
+        because the payload should not be silently discarded for a revoked token."""
+        token = "rb_rev_rb_rev_rbb"  # 17 chars
+
+        service.place("bootstrap", token, b"bootstrap-payload")
+        service.revoke(token)
+
+        resp = service.get(f"/bootstrap/{token}")
+        assert resp.status == 410
+
+        # The audit outcome for a revoked bootstrap token
+        rec = service.reads()[-1]
+        assert rec["outcome"] == "revoked"

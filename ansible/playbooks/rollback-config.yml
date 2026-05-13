@@ -1,4 +1,12 @@
 ---
+# TODO(ws5): A standalone molecule scenario for this playbook was evaluated
+# and skipped. Reason: the playbook requires /etc/xray/config.json.prev,
+# /usr/local/bin/xray, and a live systemd xray.service — all artifacts that
+# only exist after the xray role converges. A converge.yml that pre-creates
+# these would duplicate the xray role's setup, creating a drift-prone
+# maintenance surface. Coverage path: run rollback-config.yml inside the
+# full-stack molecule scenario (ansible/molecule/full-stack/) after xray
+# converges. See ansible/CLAUDE.md for the one-playbook-per-intent decision.
 - name: Rollback Xray config to the previous version (.prev)
   hosts: vpn
   become: true
