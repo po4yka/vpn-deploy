@@ -23,6 +23,13 @@
           uuid: "22222222-2222-2222-2222-222222222222"
           short_id: "cafebabe"
   pre_tasks:
+    - name: Install jq (needed by molecule verify)
+      ansible.builtin.apt:
+        name: jq
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
     - name: Create xray user
       ansible.builtin.user:
         name: xray
