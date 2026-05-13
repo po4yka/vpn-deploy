@@ -393,11 +393,11 @@ jq -n \
     "outbounds": $outbounds,
     "route": {
       "rules":
-        $per_app +
+        ($per_app +
         [
           {"protocol":"dns", "outbound":"dns-out"},
           {"ip_is_private":true, "outbound":"direct"}
-        ],
+        ]),
       "final":"select",
       "auto_detect_interface":true
     }

@@ -28,15 +28,14 @@
   when: vpn.share_bundles | default([]) | length > 0
 
 - name: Sync share bundle contents
-  ansible.posix.synchronize:
+  ansible.builtin.copy:
     src: "{{ item.local_path }}/"
     dest: "/var/www/subscription-host/share/{{ item.token }}/"
-    delete: true
-    recursive: true
-    rsync_opts:
-      - "--chmod=D755,F644"
-      - "--chown=root:www-data"
-  delegate_to: "{{ inventory_hostname }}"
+    owner: root
+    group: www-data
+    mode: "0644"
+    directory_mode: "0755"
+    force: true
   loop: "{{ vpn.share_bundles | default([]) }}"
   loop_control:
     label: "{{ item.client }}"
