@@ -1,0 +1,180 @@
+"""Test for scripts/render-inventory.sh.
+
+Feeds tf-output-sample.json through the script via a custom terraform stub
+that handles the `console` subcommand (needed for allowed_ssh_cidrs) and
+asserts the stdout matches inventory-sample.ini byte-for-byte.
+
+render-inventory.sh writes to ansible/inventory/generated.ini AND cats it to
+stdout.  We capture stdout for the comparison.
+"""
+from __future__ import annotations
+
+import os
+import stat
+import subprocess
+from pathlib import Path
+
+import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = REPO_ROOT / "tests" / "fixtures"
+STUBS_BIN = REPO_ROOT / "tests" / "stubs" / "bin"
+SCRIPT = REPO_ROOT / "scripts" / "render-inventory.sh"
+EXPECTED_INVENTORY = FIXTURES / "inventory-sample.ini"
+
+
+def _make_stub(bin_dir: Path, name: str, body: str) -> None:
+    p = bin_dir / name
+    p.write_text("#!/bin/sh\n" + body + "\n")
+    p.chmod(p.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def _build_terraform_stub(bin_dir: Path, fixture: Path) -> None:
+    """Write a terraform stub that handles all subcommands used by render-inventory.sh.
+
+    The standard stub handles `output -raw <key>` and `output -json` but
+    returns nothing for `console`.  render-inventory.sh calls:
+
+        terraform -chdir=<dir> console -no-color -var-file=<f> <<< "jsonencode(var.allowed_ssh_cidrs)"
+
+    and pipes the result through `jq -r .` then `jq -c .`.
+    We return `"[\\"203.0.113.0/24\\"]"` (a JSON-encoded JSON string) so that
+    the two jq calls decode it to `["203.0.113.0/24"]`.
+
+    We hardcode the fixture path so the stub works from any directory.
+    """
+    fixture_path = str(fixture)
+    body = f"""
+STUB_LOG="${{STUB_LOG:-/dev/null}}"
+printf 'STUB: terraform %s\\n' "$*" >> "${{STUB_LOG}}"
+
+FIXTURE="{fixture_path}"
+
+# Consume all leading -chdir=... flags (terraform allows them anywhere).
+while true; do
+  case "${{1:-}}" in
+    -chdir=*) shift ;;
+    *) break ;;
+  esac
+done
+
+case "${{1:-}}" in
+  output)
+    shift
+    if [ "${{1:-}}" = "-json" ]; then
+      cat "${{FIXTURE}}"
+      exit 0
+    fi
+    if [ "${{1:-}}" = "-raw" ]; then
+      key="${{2:-}}"
+      python3 -c "
+import json, sys
+d = json.load(open('${{FIXTURE}}'))
+k = sys.argv[1]
+if k in d:
+    print(d[k]['value'], end='')
+else:
+    sys.exit(1)
+" "$key"
+      exit 0
+    fi
+    exit 0
+    ;;
+  console)
+    # Return a JSON-encoded JSON array for allowed_ssh_cidrs.
+    # jq -r . decodes the outer quotes → ["203.0.113.0/24"]
+    # jq -c . compacts it  → ["203.0.113.0/24"]
+    printf '"[\\\\"203.0.113.0/24\\\\"]"\\n'
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+"""
+    _make_stub(bin_dir, "terraform", body)
+
+
+def test_render_inventory_matches_fixture(tmp_path):
+    """render-inventory.sh output must match inventory-sample.ini exactly.
+
+    The script requires:
+      - terraform binary (stubbed via PATH)
+      - jq binary (real)
+      - terraform/providers/upcloud/environments/prod.tfvars to exist (file
+        presence check in shell, before terraform is invoked)
+      - ansible/inventory/ directory to exist (for generated.ini)
+
+    We create prod.tfvars temporarily and restore all touched files on exit.
+    """
+    import shutil as _shutil
+    if not _shutil.which("jq"):
+        pytest.skip("jq not found on PATH")
+
+    stub_bin = tmp_path / "bin"
+    stub_bin.mkdir()
+    _build_terraform_stub(stub_bin, FIXTURES / "tf-output-sample.json")
+
+    # The script checks for the tfvars file before invoking terraform.
+    # Create a minimal placeholder (content is irrelevant — only existence matters
+    # because our terraform stub ignores it).
+    tfvars_path = REPO_ROOT / "terraform" / "providers" / "upcloud" / "environments" / "prod.tfvars"
+    tfvars_existed = tfvars_path.exists()
+    tfvars_original = tfvars_path.read_bytes() if tfvars_existed else None
+    if not tfvars_existed:
+        tfvars_path.write_text("# test fixture placeholder\n")
+
+    generated_ini = REPO_ROOT / "ansible" / "inventory" / "generated.ini"
+    had_generated = generated_ini.exists()
+    original_content = generated_ini.read_bytes() if had_generated else None
+
+    env = os.environ.copy()
+    env["PATH"] = f"{stub_bin}:{env['PATH']}"
+    env["ANSIBLE_SSH_PRIVATE_KEY_FILE"] = "/tmp/test-ssh-key"
+    env["PROVIDER"] = "upcloud"
+    env["ENV"] = "prod"
+    env.pop("HOSTS", None)
+    env.pop("COHORTS", None)
+    env["STUB_LOG"] = str(tmp_path / "stub.log")
+
+    try:
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(REPO_ROOT),
+        )
+    finally:
+        # Restore generated.ini.
+        if had_generated and original_content is not None:
+            generated_ini.write_bytes(original_content)
+        elif not had_generated and generated_ini.exists():
+            generated_ini.unlink()
+        # Restore prod.tfvars.
+        if not tfvars_existed and tfvars_path.exists():
+            tfvars_path.unlink()
+        elif tfvars_existed and tfvars_original is not None:
+            tfvars_path.write_bytes(tfvars_original)
+
+    if result.returncode != 0:
+        pytest.fail(
+            f"render-inventory.sh exited {result.returncode}:\n"
+            f"stdout: {result.stdout[:1000]}\nstderr: {result.stderr[:500]}"
+        )
+
+    # The script prints "wrote ...\n--\n" before the inventory content.
+    # Extract just the inventory portion (everything after "--\n").
+    stdout = result.stdout
+    separator = "--\n"
+    if separator in stdout:
+        inventory_out = stdout[stdout.index(separator) + len(separator):]
+    else:
+        inventory_out = stdout
+
+    expected = EXPECTED_INVENTORY.read_text()
+    assert inventory_out == expected, (
+        f"Inventory output does not match fixture.\n"
+        f"--- expected ---\n{expected}\n"
+        f"--- got ---\n{inventory_out}"
+    )
