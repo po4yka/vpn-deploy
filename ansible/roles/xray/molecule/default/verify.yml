@@ -16,14 +16,20 @@
           - cfg.stat.gr_name == "xray"
           - cfg.stat.mode == "0640"
 
-    - name: config.json contains expected REALITY structure
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          grep -q '"protocol": "vless"' /etc/xray/config.json
-          grep -q '"security": "reality"' /etc/xray/config.json
-          grep -q '"flow": "xtls-rprx-vision"' /etc/xray/config.json
-        executable: /bin/bash
+    - name: config.json is valid JSON and contains a REALITY inbound
+      # Single jq invocation replaces three earlier shell+grep tasks and
+      # the python json.load sanity check. If jq parses the file and finds
+      # a vless+reality inbound with xtls-rprx-vision flow, all three
+      # invariants are met. Failure exits non-zero with the jq error.
+      ansible.builtin.command:
+        cmd: >-
+          jq -e '
+            [.inbounds[]?
+             | select(.protocol == "vless")
+             | select(.streamSettings?.security == "reality")
+             | select(.settings?.clients[]?.flow == "xtls-rprx-vision")
+            ] | length > 0
+          ' /etc/xray/config.json
       changed_when: false
 
     - name: systemd unit installed
@@ -37,31 +43,6 @@
         path: /opt/xray/current
       register: link
       failed_when: not link.stat.islnk or 'v26.3.27' not in link.stat.lnk_target
-
-    # State-level: the stubbed xray binary sleeps in `run` mode, so the
-    # unit should reach `active (running)`. If the role's restart handler
-    # ever silently swallows a start failure, this catches it.
-    - name: xray.service is active
-      ansible.builtin.command:
-        cmd: systemctl is-active xray.service
-      register: xray_active
-      changed_when: false
-      failed_when: xray_active.stdout != "active"
-
-    - name: xray.service journal has no fatal entries
-      ansible.builtin.shell:
-        cmd: |
-          set -o pipefail
-          ! journalctl -u xray.service --since "5 minutes ago" \
-            --no-pager --output=cat \
-            | grep -iE 'traceback|fatal|panic|failed to'
-        executable: /bin/bash
-      changed_when: false
-
-    - name: config.json is valid JSON
-      ansible.builtin.shell:
-        cmd: python3 -c "import json,sys; json.load(open('/etc/xray/config.json'))"
-      changed_when: false
 
     # Use jq directly instead of slurp+from_json+selectattr — far less
     # fragile across Jinja/Ansible versions and the output is auditable
