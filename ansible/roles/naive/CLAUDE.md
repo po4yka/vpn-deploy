@@ -1,0 +1,26 @@
+# role: naive — NaiveProxy transport (optional)
+
+## Design decisions
+
+**Optional, off by default** — `vpn.enable_naive: false`. NaiveProxy is a
+useful tactical option for HTTP/2 + Chromium TLS fingerprint, but its v147
+preamble change (see `docs/CLIENT-NOTES.md`) burned an upgrade cycle.
+
+**Reuses nginx-xhttp's cert + port** — when on, NaiveProxy lives on
+`/naive/<path>` behind the same TLS as XHTTP. Don't allocate a second port.
+
+## What's done well
+
+- **Pinned binary + version** — pinned per `docs/CLIENT-NOTES.md` because
+  client/server version skew is a real breakage class here.
+- **Padding leak fix is monitored** — sing-box ≤ 1.10 NaiveProxy padding leak
+  is noted; the role bumps the client recommendation when applicable.
+
+## Pitfalls
+
+- **v147 preamble change is breaking** — clients on < v147 cannot connect to
+  server on ≥ v147. Coordinate upgrades; staging environment exists for this.
+- **Authentication is HTTP Basic over TLS** — credentials in SOPS; the
+  generated config emits them via env so they don't sit in plain config.
+- **Don't share the auth pair across clients** — one credential per device,
+  same rule as VLESS UUIDs.

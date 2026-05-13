@@ -1,0 +1,49 @@
+# tests — coverage matrix
+
+## Layers
+
+| Layer | What | Where | Speed |
+|-------|------|-------|-------|
+| Unit | Python validators + Jinja-render assertions | `tests/unit/` (pytest) | seconds |
+| Snapshot | Golden Jinja renders for every template | `tests/snapshot/` | seconds |
+| Schema | `validate-secrets.py` jsonschema | `tests/unit/test_schema.py` | seconds |
+| Molecule (role) | Per-role Ansible scenario in Docker | `ansible/roles/<role>/molecule/` | ~1 min/role |
+| Molecule (full-stack) | `site.yml` end-to-end | `ansible/molecule/full-stack/` | ~10 min |
+| TF test | `mock_provider` plan-shape tests | per `terraform/providers/<name>/` | seconds |
+| CI ephemeral deploy | Label-gated real UpCloud deploy | `.github/workflows/` + `docs/CI-REAL-DEPLOY.md` | ~15 min |
+
+## Design decisions
+
+**`ci-fast` is the pre-PR gate** — runs unit + snapshot + schema + render +
+syntax + pytest. Mirrors a job on `.github/workflows/ci.yml`. If `ci-fast`
+passes locally, CI's `ci-fast` will pass too.
+
+**Snapshots, not mocks, for templates** — `tests/snapshot/golden/` holds
+the expected output of every Jinja render against fixtures. Drift is
+visible in PR diffs.
+
+**Molecule per role > monolithic test** — role-level scenarios catch
+config drift inside a role. Full-stack catches order/handler interactions.
+
+## What's done well
+
+- **Quirk-named tests** — `test_xhttp_path_matches_both_slash_and_unslashed`,
+  `test_relay_sni_fails_closed_when_local_sni_missing`. The name *is* the
+  doc.
+- **`snapshot-update` is explicit** — never updates on assertion failure;
+  requires an operator running `make snapshot-update` after an intentional
+  template change. CI never auto-updates.
+- **`shellcheck` in CI** — every `.sh` file. Warnings break the build.
+
+## Pitfalls
+
+- **Snapshot files are committed** — never gitignore `tests/snapshot/golden/`.
+  PR diff is the review surface.
+- **Molecule needs Docker** — CI runners and operator workstations vary.
+  Failing-to-find-docker is a setup error, not a test failure; the harness
+  surfaces it explicitly.
+- **`validate-secrets.py` runs against the **schema**, not your real
+  secrets** — by design. Strict mode (`--strict`) loads `SECRETS_FILE`
+  and is operator-only.
+- **Don't snapshot the diff of binaries** — QR PNGs, restic repos, etc.
+  Snapshot the inputs, render the binary fresh, hash-assert if needed.

@@ -1,0 +1,44 @@
+# scripts — operator entry points
+
+## Design decisions
+
+**Shell + Python, no compiled binaries** — every script must be readable on
+a fresh box without a build step. Most are bash; the rare ones with non-trivial
+data shaping are Python and use only stdlib + `PyYAML` / `Jinja2`.
+
+**One file per operator verb** — `bootstrap-secrets.sh`, `rotate-secrets.sh`,
+`fleet-rotate.sh`. The Makefile wraps these with `make <target>` shorthand.
+
+**SOPS gate everywhere** — anything that reads decrypted secrets refuses
+without `VPN_SECRETS_FILE` env or a freshly decrypted `/tmp/vpn-<env>.secrets.yaml`.
+Never re-implement decryption.
+
+**Audit-log is opt-out, not opt-in** — destructive scripts append to
+`audit-log.sh append-best-effort` after a successful run. The `--no-audit`
+flag exists for testing but is undocumented.
+
+## What's done well
+
+- **`set -euo pipefail` everywhere** — fail-loud is the default.
+- **`shellcheck` in CI** — the `ci.yml` workflow runs shellcheck on every
+  `.sh` file; warnings break the build.
+- **Idempotent where it matters** — `validate-target`, `check-certs`,
+  `audit-permissions` can run repeatedly with no side effects.
+- **One script = one job** — no flag-driven multi-mode scripts. `new-client.sh`
+  and `new-cohort.sh` are separate even though they share boilerplate.
+
+## Pitfalls
+
+- **Shell-injection on operator-supplied input** — any script taking a host
+  name, client name, or path uses `"$1"` quoting and `printf '%q'` when
+  forwarding to nested shells. Never `eval`.
+- **`mktemp` differs on macOS vs Linux** — operator workstations are both.
+  Use `mktemp -t prefix.XXXXXX` (works on both) rather than the bare form.
+- **`age` keyring location** — `~/.config/sops/age/keys.txt` on Linux,
+  `~/Library/Application Support/sops/age/keys.txt` on macOS. The wrapper
+  scripts pick correctly via `${SOPS_AGE_KEY_FILE:-…}`; don't hard-code.
+- **`audit-log.sh` failures must not break the parent script** — use
+  `append-best-effort` (logs the error, exits 0) rather than `append`.
+- **Python scripts must run under the venv-less system python3** — operator
+  workstations don't all have uv/poetry. Use stdlib + the pinned deps in
+  `requirements.in`. Don't import `requests` (use `urllib.request`).
