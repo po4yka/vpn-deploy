@@ -23,7 +23,7 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         setup-yubikey check-killswitch install-operator-crons \
         remove-operator-crons issue-sub-token sub-reads \
         test-unit snapshot-check snapshot-update validate-secrets \
-        tf-test ci-fast vpnd-test vpnd-clippy
+        tf-test ci-fast bats-test vpnd-test vpnd-clippy vpnd-mutants tf-policy
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -257,6 +257,7 @@ ci-fast:
 	  echo "== ansible syntax == (skipped: ansible-playbook not on PATH)"; \
 	fi
 	@echo "== unit tests =="; python3 -m pytest tests/unit/ -q
+	@echo "== bats shell tests =="; bats tests/bats/
 	@echo "ci-fast: OK"
 
 molecule-test:
@@ -408,8 +409,25 @@ blue-green:
 	@test -n "$(GREEN_ENV)" || { echo "GREEN_ENV=<name> required (e.g. green, spare2)"; exit 1; }
 	PROVIDER=$(PROVIDER) BLUE_ENV=$(ENV) GREEN_ENV=$(GREEN_ENV) ./scripts/blue-green.sh
 
+bats-test:
+	bats tests/bats/
+
 vpnd-test:
 	cd vpnd && cargo test --release
 
 vpnd-clippy:
 	cd vpnd && cargo clippy --release --all-targets -- -D warnings
+
+vpnd-mutants:
+	cd vpnd && cargo mutants --no-shuffle
+
+tf-policy:
+	@for p in upcloud hetzner vultr; do \
+	  echo "== $$p =="; \
+	  terraform -chdir=terraform/providers/$$p init -backend=false >/dev/null && \
+	  terraform -chdir=terraform/providers/$$p plan \
+	    -out=$$p.plan \
+	    -var-file=environments/prod.tfvars.example && \
+	  terraform -chdir=terraform/providers/$$p show -json $$p.plan \
+	    | conftest test -p terraform/policy/ -; \
+	done

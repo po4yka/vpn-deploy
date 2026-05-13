@@ -1,10 +1,11 @@
-# Hetzner provider
+# UpCloud provider
 
-Terraform root for a single Hetzner Cloud VPS running the provider-neutral
+Terraform root for a single UpCloud VPS running the provider-neutral
 Ansible stack.
 
-Credentials come from `HCLOUD_TOKEN`; do not place provider tokens in tfvars.
-The root exports the same inventory-facing outputs as `providers/upcloud/`:
+Credentials come from `UPCLOUD_USERNAME` and `UPCLOUD_PASSWORD`; do not
+place provider tokens in tfvars. The root exports the same
+inventory-facing outputs as `providers/hetzner/` and `providers/vultr/`:
 
 - `server_ipv4`
 - `server_ipv6`
@@ -16,13 +17,13 @@ The root exports the same inventory-facing outputs as `providers/upcloud/`:
 Example:
 
 ```bash
-cp terraform/providers/hetzner/environments/prod.tfvars.example \
-   terraform/providers/hetzner/environments/prod.tfvars
-$EDITOR terraform/providers/hetzner/environments/prod.tfvars
-HCLOUD_TOKEN=... make PROVIDER=hetzner ENV=prod init plan
+cp terraform/providers/upcloud/environments/prod.tfvars.example \
+   terraform/providers/upcloud/environments/prod.tfvars
+$EDITOR terraform/providers/upcloud/environments/prod.tfvars
+UPCLOUD_USERNAME=... UPCLOUD_PASSWORD=... make PROVIDER=upcloud ENV=prod init plan
 ```
 
-See `terraform/providers/hetzner/CLAUDE.md` for design decisions and pitfalls.
+See `terraform/providers/upcloud/CLAUDE.md` for design decisions and pitfalls.
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
@@ -30,7 +31,7 @@ See `terraform/providers/hetzner/CLAUDE.md` for design decisions and pitfalls.
 | Name | Version |
 | ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.15 |
-| <a name="requirement_hcloud"></a> [hcloud](#requirement\_hcloud) | ~> 1.62 |
+| <a name="requirement_upcloud"></a> [upcloud](#requirement\_upcloud) | ~> 5.36 |
 
 ## Modules
 
@@ -40,11 +41,8 @@ No modules.
 
 | Name | Type |
 | ---- | ---- |
-| [hcloud_firewall.vpn](https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/resources/firewall) | resource |
-| [hcloud_firewall_attachment.vpn](https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/resources/firewall_attachment) | resource |
-| [hcloud_floating_ip.honeypot_ipv4](https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/resources/floating_ip) | resource |
-| [hcloud_server.vpn](https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/resources/server) | resource |
-| [hcloud_ssh_key.admin](https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs/resources/ssh_key) | resource |
+| [upcloud_firewall_rules.vpn](https://registry.terraform.io/providers/UpCloudLtd/upcloud/latest/docs/resources/firewall_rules) | resource |
+| [upcloud_server.vpn](https://registry.terraform.io/providers/UpCloudLtd/upcloud/latest/docs/resources/server) | resource |
 
 ## Inputs
 
@@ -55,15 +53,14 @@ No modules.
 | <a name="input_admin_user"></a> [admin\_user](#input\_admin\_user) | n/a | `string` | `"deploy"` | no |
 | <a name="input_allowed_ssh_cidrs"></a> [allowed\_ssh\_cidrs](#input\_allowed\_ssh\_cidrs) | Source CIDRs allowed to reach 22/tcp. | `list(string)` | n/a | yes |
 | <a name="input_build_env"></a> [build\_env](#input\_build\_env) | Free-form label baked into /etc/vpn-build-id by cloud-init. | `string` | `"prod"` | no |
-| <a name="input_enable_backups"></a> [enable\_backups](#input\_enable\_backups) | Enable provider-side server backups. | `bool` | `true` | no |
 | <a name="input_enable_hysteria"></a> [enable\_hysteria](#input\_enable\_hysteria) | n/a | `bool` | `true` | no |
-| <a name="input_enable_ipv6"></a> [enable\_ipv6](#input\_enable\_ipv6) | Allocate and expose a public IPv6 address. | `bool` | `true` | no |
-| <a name="input_image"></a> [image](#input\_image) | Hetzner image slug, e.g. debian-12 or ubuntu-24.04. | `string` | n/a | yes |
 | <a name="input_labels"></a> [labels](#input\_labels) | n/a | `map(string)` | `{}` | no |
-| <a name="input_location"></a> [location](#input\_location) | Hetzner Cloud location, e.g. hel1, nbg1, fsn1. | `string` | n/a | yes |
 | <a name="input_nginx_xhttp_public_port"></a> [nginx\_xhttp\_public\_port](#input\_nginx\_xhttp\_public\_port) | Public TCP port for nginx-xhttp. Keep this in sync with Ansible nginx\_xhttp\_public\_port. | `number` | `8443` | no |
+| <a name="input_plan"></a> [plan](#input\_plan) | UpCloud plan slug, e.g. 1xCPU-2GB or DEV-2xCPU-4GB. | `string` | n/a | yes |
 | <a name="input_server_name"></a> [server\_name](#input\_server\_name) | Hostname / Terraform name of the VPS. | `string` | n/a | yes |
-| <a name="input_server_type"></a> [server\_type](#input\_server\_type) | Hetzner server type, e.g. cpx11, cpx21, cx22. | `string` | n/a | yes |
+| <a name="input_storage_size_gb"></a> [storage\_size\_gb](#input\_storage\_size\_gb) | Root disk size in GB. | `number` | `25` | no |
+| <a name="input_storage_template"></a> [storage\_template](#input\_storage\_template) | Storage template UUID to clone from. Pin to a specific Debian 13 / Ubuntu 24.04 template. | `string` | n/a | yes |
+| <a name="input_zone"></a> [zone](#input\_zone) | UpCloud zone, e.g. fi-hel1, de-fra1, us-nyc1. | `string` | n/a | yes |
 
 ## Outputs
 
@@ -74,5 +71,5 @@ No modules.
 | <a name="output_server_hostname"></a> [server\_hostname](#output\_server\_hostname) | n/a |
 | <a name="output_server_ipv4"></a> [server\_ipv4](#output\_server\_ipv4) | Public IPv4 address (primary). |
 | <a name="output_server_ipv6"></a> [server\_ipv6](#output\_server\_ipv6) | Public IPv6 address (may be null if disabled). |
-| <a name="output_zone"></a> [zone](#output\_zone) | Provider location for compatibility with the UpCloud output name. |
+| <a name="output_zone"></a> [zone](#output\_zone) | n/a |
 <!-- END_TF_DOCS -->

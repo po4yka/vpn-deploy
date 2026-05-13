@@ -1,11 +1,15 @@
 {
-  "log": {"level": "warn", "timestamp": true},
+  "log": { "level": "warn", "timestamp": true },
   "dns": {
     "servers": [
-      {"tag": "remote", "address": "https://1.1.1.1/dns-query", "detour": "select"},
-      {"tag": "local",  "address": "local",                      "detour": "direct"}
+      {
+        "tag": "remote",
+        "address": "https://1.1.1.1/dns-query",
+        "detour": "select"
+      },
+      { "tag": "local", "address": "local", "detour": "direct" }
     ],
-    "rules": [{"outbound": ["any"], "server": "local"}]
+    "rules": [{ "outbound": ["any"], "server": "local" }]
   },
   "inbounds": [
     {
@@ -30,7 +34,7 @@
       "tls": {
         "enabled": true,
         "server_name": "cdn.example.com",
-        "utls": {"enabled": true, "fingerprint": "chrome"},
+        "utls": { "enabled": true, "fingerprint": "chrome" },
         "reality": {
           "enabled": true,
           "public_key": "test-reality-public-key-fixture-00000000000000000000000000000",
@@ -53,14 +57,14 @@
       "interval": "5m",
       "tolerance": 50
     },
-    {"type": "direct", "tag": "direct"},
-    {"type": "block",  "tag": "block"},
-    {"type": "dns",    "tag": "dns-out"}
+    { "type": "direct", "tag": "direct" },
+    { "type": "block", "tag": "block" },
+    { "type": "dns", "tag": "dns-out" }
   ],
   "route": {
     "rules": [
-      {"protocol": "dns", "outbound": "dns-out"},
-      {"ip_is_private": true, "outbound": "direct"}
+      { "protocol": "dns", "outbound": "dns-out" },
+      { "ip_is_private": true, "outbound": "direct" }
     ],
     "final": "select",
     "auto_detect_interface": true
