@@ -15,9 +15,9 @@ pub async fn run(ctx: &Context, args: DeployArgs) -> Result<()> {
     let mut s = Summary::new("Deploy plan");
     s.add("env", &ctx.env)
         .add("provider", &ctx.provider)
-        .add("repo", &ctx.root.display().to_string())
-        .add("sops file", &ctx.sops_file.display().to_string())
-        .add("secrets file", &ctx.secrets_file.display().to_string())
+        .add("repo", ctx.root.display().to_string())
+        .add("sops file", ctx.sops_file.display().to_string())
+        .add("secrets file", ctx.secrets_file.display().to_string())
         .add("skip precheck", if args.skip_precheck { "yes" } else { "no" })
         .add("tag on success", if args.tag_on_success { "yes" } else { "no" });
     s.render();

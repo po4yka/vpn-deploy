@@ -38,3 +38,65 @@ pub fn relevant_runbook_excerpts(report: &str) -> String {
 
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_report_produces_empty_excerpts() {
+        let result = relevant_runbook_excerpts("");
+        assert!(result.is_empty(), "empty report must yield empty excerpts, got: {result:?}");
+    }
+
+    #[test]
+    fn report_with_no_keywords_produces_empty_excerpts() {
+        let result = relevant_runbook_excerpts("everything looks fine, no issues detected");
+        assert!(result.is_empty(), "no-keyword report must yield empty excerpts, got: {result:?}");
+    }
+
+    #[test]
+    fn fleet_status_keyword_triggers_excerpt() {
+        let result = relevant_runbook_excerpts("fleet-status check failed on host");
+        // If the runbook file exists in DOCS, we get content; either way the fn must not panic.
+        // When docs are bundled, we expect some output:
+        if DOCS.get_file("RUNBOOK-incident.md").is_some() {
+            assert!(!result.is_empty(), "fleet-status must produce excerpts when runbook exists");
+            assert!(result.contains("RUNBOOK-incident.md"), "must cite incident runbook, got: {result:?}");
+        }
+    }
+
+    #[test]
+    fn asn_drift_keyword_triggers_incident_runbook() {
+        let result = relevant_runbook_excerpts("asn-drift detected");
+        if DOCS.get_file("RUNBOOK-incident.md").is_some() {
+            assert!(result.contains("RUNBOOK-incident.md"), "asn-drift must cite incident runbook, got: {result:?}");
+        }
+    }
+
+    #[test]
+    fn burn_check_keyword_triggers_multiple_runbooks() {
+        let result = relevant_runbook_excerpts("burn-check alert");
+        if DOCS.get_file("RUNBOOK-incident.md").is_some() && DOCS.get_file("RUNBOOK-rotate.md").is_some() {
+            assert!(result.contains("RUNBOOK-incident.md"), "burn-check must cite incident runbook, got: {result:?}");
+            assert!(result.contains("RUNBOOK-rotate.md"), "burn-check must cite rotate runbook, got: {result:?}");
+        }
+    }
+
+    #[test]
+    fn duplicate_runbook_suppressed_for_two_matching_keywords() {
+        // Both fleet-status and asn-drift match RUNBOOK-incident.md — it must appear only once.
+        let result = relevant_runbook_excerpts("fleet-status asn-drift");
+        let count = result.matches("RUNBOOK-incident.md").count();
+        assert!(count <= 1, "duplicate runbook must be suppressed, got count={count} in: {result:?}");
+    }
+
+    #[test]
+    fn missing_runbook_file_silently_skipped() {
+        // KEYWORD_MAP references files that may not exist; fn must not panic.
+        // We force a report that would trigger a lookup regardless.
+        let result = relevant_runbook_excerpts("fleet-status asn-drift burn-check");
+        // No panic = pass. Result may or may not be empty depending on bundled docs.
+        let _ = result;
+    }
+}

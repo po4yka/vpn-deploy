@@ -155,3 +155,114 @@ pub struct Output {
     pub rc: i32,
     pub stdout: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn explain_plain_program_no_env_no_cwd() {
+        let cmd = Cmd::new("echo").arg("hello");
+        assert_eq!(cmd.explain(), "echo hello");
+    }
+
+    #[test]
+    fn explain_arg_with_spaces_is_quoted() {
+        let cmd = Cmd::new("echo").arg("hello world");
+        let s = cmd.explain();
+        assert!(s.contains("'hello world'") || s.contains("\"hello world\""),
+            "space in arg must be shell-quoted, got: {s}");
+    }
+
+    #[test]
+    fn explain_arg_with_single_quote() {
+        let cmd = Cmd::new("echo").arg("it's here");
+        let s = cmd.explain();
+        // shell-words should produce a form the shell can re-parse
+        assert!(s.contains("it") && s.contains("s here"),
+            "single-quoted arg must survive quoting, got: {s}");
+        assert!(!s.contains("it's here"), "bare unquoted apostrophe must not appear, got: {s}");
+    }
+
+    #[test]
+    fn explain_arg_with_double_quote() {
+        let cmd = Cmd::new("echo").arg("say \"hi\"");
+        let s = cmd.explain();
+        // shell-words must quote the argument (single or double quoting both valid)
+        assert!(s.len() > 10, "double-quoted arg must be represented, got: {s}");
+        // The literal unquoted form `echo say "hi"` would split into three words;
+        // shell-words must produce a single-token form like `'say "hi"'` or `"say \"hi\""`.
+        let unquoted = "echo say \"hi\"";
+        assert_ne!(s, unquoted, "arg with double-quotes must be shell-quoted, got: {s}");
+    }
+
+    #[test]
+    fn explain_arg_with_dollar_var() {
+        let cmd = Cmd::new("echo").arg("$HOME");
+        let s = cmd.explain();
+        // $HOME must be quoted so the shell does not expand it
+        assert!(!s.ends_with(" $HOME"), "dollar-var must be shell-quoted, got: {s}");
+    }
+
+    #[test]
+    fn explain_arg_with_newline() {
+        let cmd = Cmd::new("echo").arg("line1\nline2");
+        let s = cmd.explain();
+        // A literal newline in an unquoted token is a shell syntax error; shell-words must quote it
+        assert!(!s.contains('\n') || s.contains('\'') || s.contains('"'),
+            "newline in arg must be quoted, got: {s:?}");
+    }
+
+    #[test]
+    fn explain_env_vars_appear_before_program() {
+        let cmd = Cmd::new("make")
+            .env("FOO", "bar")
+            .env("BAZ", "qux")
+            .arg("target");
+        let s = cmd.explain();
+        let make_pos = s.find("make").expect("'make' must appear");
+        let foo_pos = s.find("FOO=").expect("FOO= must appear");
+        let baz_pos = s.find("BAZ=").expect("BAZ= must appear");
+        assert!(foo_pos < make_pos, "FOO= must precede program, got: {s}");
+        assert!(baz_pos < make_pos, "BAZ= must precede program, got: {s}");
+        // Declaration order preserved
+        assert!(foo_pos < baz_pos, "FOO= must come before BAZ=, got: {s}");
+    }
+
+    #[test]
+    fn explain_env_value_with_spaces_is_quoted() {
+        let cmd = Cmd::new("echo").env("K", "value with spaces");
+        let s = cmd.explain();
+        assert!(!s.contains("K=value with spaces"), "space in env value must be quoted, got: {s}");
+    }
+
+    #[test]
+    fn explain_cwd_wraps_with_cd_and_ampersand() {
+        let cmd = Cmd::new("make").arg("all").cwd(PathBuf::from("/some/path"));
+        let s = cmd.explain();
+        assert!(s.starts_with("(cd "), "must start with (cd, got: {s}");
+        assert!(s.contains("&& make"), "must contain && program, got: {s}");
+        assert!(s.ends_with(')'), "must end with ), got: {s}");
+    }
+
+    #[test]
+    fn explain_cwd_with_spaces_is_quoted() {
+        let cmd = Cmd::new("make").cwd(PathBuf::from("/path with spaces/repo"));
+        let s = cmd.explain();
+        assert!(!s.contains("(cd /path with spaces"), "cwd with spaces must be quoted, got: {s}");
+    }
+
+    #[test]
+    fn explain_env_ordering_is_stable() {
+        // env vars must appear in insertion order, not sorted
+        let cmd = Cmd::new("x")
+            .env("ZEBRA", "1")
+            .env("ALPHA", "2")
+            .env("MANGO", "3");
+        let s = cmd.explain();
+        let z = s.find("ZEBRA=").unwrap();
+        let a = s.find("ALPHA=").unwrap();
+        let m = s.find("MANGO=").unwrap();
+        assert!(z < a && a < m, "env must be in insertion order, got: {s}");
+    }
+}
