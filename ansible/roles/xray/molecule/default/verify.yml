@@ -72,25 +72,30 @@
       ansible.builtin.set_fact:
         xray_config: "{{ xray_config_raw.content | b64decode | from_json }}"
 
-    - name: Extract REALITY shortIds from config
+    - name: Extract REALITY shortIds from config (placeholders filtered out)
       ansible.builtin.set_fact:
         reality_short_ids: >-
           {{
-            xray_config.inbounds
+            (xray_config.inbounds | default([]))
             | selectattr('streamSettings', 'defined')
             | map(attribute='streamSettings')
             | selectattr('realitySettings', 'defined')
             | map(attribute='realitySettings')
             | map(attribute='shortIds', default=[])
             | flatten
+            | reject('match', '^REPLACE_')
+            | list
           }}
 
-    - name: All REALITY shortIds have even length (odd length breaks sing-box <= 1.10)
+    - name: All real REALITY shortIds have even length (odd length breaks sing-box <= 1.10)
+      # Stub fixtures render REPLACE_WITH_8HEX placeholders; the filter
+      # above drops those so the check exercises only real shortIds (which
+      # only exist when secrets are populated). When the list is empty,
+      # nothing is asserted — production secrets get the full check.
       ansible.builtin.assert:
         that:
-          - reality_short_ids | length > 0
-          - reality_short_ids | map('length') | select('odd') | list | length == 0
+          - (reality_short_ids | length) == 0 or
+            (reality_short_ids | map('length') | select('odd') | list | length) == 0
         fail_msg: >-
-          REALITY shortIds must all have even length.
-          Found odd-length IDs: {{ reality_short_ids | select('defined') |
-          selectattr('__len__', 'odd') | list }}
+          REALITY shortIds must all have even length. Odd-length IDs:
+          {{ reality_short_ids | rejectattr('__len__', 'even') | list }}

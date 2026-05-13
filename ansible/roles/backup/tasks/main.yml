@@ -39,11 +39,9 @@
 - name: Initialize restic repo if missing
   ansible.builtin.command:
     cmd: restic -r {{ restic_repo_dir }} --password-file /etc/restic/password init
+    creates: "{{ restic_repo_dir }}/config"
   register: restic_init
-  changed_when: "'created restic repository' in restic_init.stderr or 'created restic repository' in restic_init.stdout"
-  failed_when:
-    - restic_init.rc != 0
-    - "'already initialized' not in (restic_init.stderr | default(''))"
+  changed_when: "'created restic repository' in (restic_init.stderr | default('')) or 'created restic repository' in (restic_init.stdout | default(''))"
 
 - name: Ensure rclone config directory
   ansible.builtin.file:
