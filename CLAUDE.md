@@ -70,6 +70,52 @@ cd vpnd && cargo test   # snapshot tests for the recipient page
 release-please drives versioning from Conventional Commits. Don't edit
 `CHANGELOG.md` by hand. One bump per session by intent.
 
+## Change recipes
+
+### New Ansible role
+
+1. Scaffold `ansible/roles/<name>/` (tasks, defaults, meta, handlers as needed).
+2. Add enable toggle to `ansible/group_vars/all.yml`.
+3. Add secrets keys to `secrets/prod.secrets.example.yaml` if the role needs secrets.
+4. Write a molecule scenario under `ansible/roles/<name>/molecule/` or add a justified skip to `docs/TESTING.md`.
+5. Create `ansible/roles/<name>/CLAUDE.md` (Design decisions / Done well / Pitfalls).
+6. Update `README.md` if operator-facing behaviour changed.
+7. Include the role in `ansible/site.yml` behind the toggle.
+
+### New Terraform provider
+
+1. Create `terraform/providers/<name>/` with identical output schema to existing providers (`server_ipv4`, `server_ipv6`, `admin_user`, `server_hostname`).
+2. Add a branch to `scripts/render-inventory.sh` for the new provider's output keys.
+3. Add a row to `docs/PROVIDER-NOTES.md` (status, version, known limits).
+4. Create `terraform/providers/<name>/CLAUDE.md`.
+
+### New vpnd subcommand
+
+1. Add a variant to the `Command` enum in `vpnd/src/cli.rs`.
+2. Create `vpnd/src/commands/<name>.rs` with signature `pub async fn run(ctx: &Context, args: …Args) -> Result<()>`.
+3. Wire the module in `vpnd/src/commands/mod.rs`.
+4. Add a match arm in `vpnd/src/main.rs`.
+5. Add a snapshot test if the subcommand renders output (see existing tests for pattern).
+6. Update `vpnd/CLAUDE.md` if the subcommand introduces an architecturally novel pattern.
+
+### New AmneziaWG cohort
+
+1. Create `ansible/roles/amneziawg/vars/cohorts/<carrier>.yml` with the obfuscation parameters.
+2. Add a row to `docs/AWG-COHORTS.md` (carrier, junk packet sizes, init/response packet sizes, obfuscation key).
+3. Add a `group_vars` hint or comment if the cohort requires non-default operator awareness at deploy time.
+
+## Source of truth
+
+| Artifact | Canonical location | Must stay in sync with |
+|---|---|---|
+| CLI flags / subcommands | `vpnd/src/cli.rs` | README, runbooks, command builder if added |
+| Package versions | release-please + `CHANGELOG.md` | `vpnd/Cargo.toml` `[package].version` |
+| Secrets schema | `scripts/check-secrets-coverage.py` + `scripts/validate-secrets.py` | `ansible/roles/*/`, `vpnd::secrets` |
+| Protocol toggles | `ansible/group_vars/all.yml` | `ansible/roles/*/`, vpnd config templates |
+| Recipient page | `vpnd/templates/recipient.html` | `ansible/roles/subscription-host/`, `docs/demo/` |
+| AWG cohort profiles | `ansible/roles/amneziawg/vars/cohorts/` | `docs/AWG-COHORTS.md` |
+| Xray version pin | `ansible/roles/xray/defaults/main.yml` | `docs/XRAY-RELEASE-LINE.md` |
+
 ## When the user says "remember"
 
 Save to the relevant folder's `CLAUDE.md`, not to a memory system. The

@@ -73,6 +73,31 @@ versions:
   the operator applies it.
 - Squash-merge is preferred for clean release-please history.
 
+## Versioning
+
+release-please derives the version bump from Conventional Commits subjects
+(see the table above). In practice:
+
+| Change type | Bump |
+|---|---|
+| New role, new vpnd subcommand, new provider, new AWG cohort | **minor** — use `feat:` |
+| Bug fix in a role, template, script, or doc | **patch** — use `fix:` |
+| Runbook update, knowledge-layer addition (CLAUDE.md), snapshot refresh after intentional template change | **patch** — use `docs:` or `fix:` |
+| Breaking API / secrets-schema / output-schema change | **major** — use `feat!:` or add `BREAKING CHANGE:` trailer |
+
+`CHANGELOG.md` is generated automatically; do not edit it by hand.
+
+## Knowledge layer
+
+If your PR touches `ansible/roles/<X>/`, `terraform/providers/<X>/`,
+`scripts/`, or `vpnd/src/`, also touch the corresponding `CLAUDE.md`
+(Design decisions / Done well / Pitfalls). The CI warn-gate
+(`claude-md-touch.yml`) surfaces omissions but does not block merge.
+
+Step-by-step recipes for the four most common contribution types (new role,
+new provider, new vpnd subcommand, new AWG cohort) are in the root
+`CLAUDE.md` under "Change recipes".
+
 ## What not to PR
 
 - `Cloudflare CDN as RU baseline` — see `docs/CDN-DECISION.md` ADR.
