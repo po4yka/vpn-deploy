@@ -70,6 +70,4 @@
         that:
           - (xray_short_ids.stdout_lines | length) == 0 or
             (xray_short_ids.stdout_lines | map('length') | select('odd') | list | length) == 0
-        fail_msg: >-
-          REALITY shortIds must all have even length. Found odd-length:
-          {{ xray_short_ids.stdout_lines | select('length') | rejectattr('__len__', 'even') | list }}
+        fail_msg: "REALITY shortIds must all have even length. Got: {{ xray_short_ids.stdout_lines }}"
