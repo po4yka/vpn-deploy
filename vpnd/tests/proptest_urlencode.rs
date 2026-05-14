@@ -3,6 +3,7 @@
 //! Covers two invariants:
 //!   1. Encoded output never contains raw whitespace.
 //!   2. Encoding is reversible via percent_decode_str (round-trip identity).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use proptest::prelude::*;
 use vpnd::commands::share::urlencode;

@@ -1,4 +1,4 @@
-use anyhow::{Context as _, Result};
+use anyhow::{anyhow, Context as _, Result};
 use owo_colors::OwoColorize;
 use std::path::Path;
 
@@ -29,7 +29,11 @@ pub async fn run(ctx: &Context, args: AiDocsArgs) -> Result<()> {
 
     for e in entries {
         let path = e.path();
-        let slug = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let slug = path
+            .file_stem()
+            .ok_or_else(|| anyhow!("doc path has no file stem: {}", path.display()))?
+            .to_string_lossy()
+            .into_owned();
         let body = std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         index.push_str(&format!("- [{}](/md/{}.md)\n", slug, slug));
         full.push_str(&format!("\n\n---\n\n## {}\n\n{}", slug, body));

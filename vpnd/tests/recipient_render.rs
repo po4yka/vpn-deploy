@@ -2,6 +2,7 @@
 //!
 //! Locked-in shape so a template tweak shows up as a clear PR diff,
 //! mirroring `vpn-deploy/tests/snapshot/` discipline for Jinja templates.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use vpnd::pages::recipient::{render, AppCard, RecipientCtx};
 

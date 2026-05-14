@@ -54,6 +54,14 @@ insta = "1"
 tempfile = "3"
 proptest = "1"
 
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

@@ -1,4 +1,5 @@
 //! Integration tests for pages::qr SVG and PNG (PPM-shaped) output.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use tempfile::TempDir;
 use vpnd::pages::qr;

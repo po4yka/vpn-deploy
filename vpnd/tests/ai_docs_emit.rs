@@ -1,4 +1,5 @@
 //! Integration tests for commands::ai_docs emission.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::fs;
 use tempfile::TempDir;

@@ -1,3 +1,7 @@
+// Build scripts are allowed to panic on failure — that is the standard
+// mechanism for aborting a Cargo build with a diagnostic message.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use std::env;
 use std::fs;
 use std::path::PathBuf;

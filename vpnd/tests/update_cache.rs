@@ -4,6 +4,7 @@
 //! For cache-path and mock-time injection we test via the `--explain` path and
 //! by writing a stale / fresh cache file directly and invoking run() with
 //! explain=true so no network call is made.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tempfile::TempDir;

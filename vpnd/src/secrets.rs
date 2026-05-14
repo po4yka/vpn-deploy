@@ -18,7 +18,7 @@ pub struct Secrets {
     pub _extra: serde_yaml::Mapping,
 }
 
-#[allow(dead_code)] // uuid/short_id read by share-bundle expansion (Phase 2)
+#[allow(dead_code)] // uuid and short_id are deserialized but not yet consumed; Phase 2 share-bundle expansion will read them to construct per-client VLESS URIs
 #[derive(Debug, Deserialize, Clone)]
 pub struct Client {
     pub name: String,

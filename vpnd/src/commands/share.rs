@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
 use owo_colors::OwoColorize;
-use std::path::PathBuf;
 
 use crate::cli::{ShareArgs, ShareType};
 use crate::config::Context;
@@ -101,6 +100,3 @@ pub fn urlencode(s: &str) -> String {
     use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
     utf8_percent_encode(s, NON_ALPHANUMERIC).to_string()
 }
-
-#[allow(dead_code)]
-fn _unused(_: PathBuf) {}

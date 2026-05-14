@@ -1,4 +1,5 @@
 //! Integration tests for state::Registry TOML round-trip.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::path::PathBuf;
 use tempfile::TempDir;

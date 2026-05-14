@@ -2,6 +2,7 @@
 //!
 //! We test the redact_secrets function and bundle structure. The bundle writing
 //! itself is tested via the public API with stubs on PATH.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use vpnd::commands::doctor;
 

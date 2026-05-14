@@ -35,7 +35,7 @@ impl Cmd {
         self
     }
 
-    #[allow(dead_code)] // bulk-arg helper, used by future commands
+    #[allow(dead_code)] // bulk-arg convenience not yet called by any wired subcommand; retained for upcoming multi-target commands
     pub fn args<I, S>(mut self, items: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -149,7 +149,7 @@ impl Cmd {
     }
 }
 
-#[allow(dead_code)] // rc surfaced for callers that distinguish 0 vs non-zero with --explain semantics
+#[allow(dead_code)] // rc field kept for callers that need to distinguish exit codes under --explain semantics; stdout is used today, rc not yet read externally
 #[derive(Debug)]
 pub struct Output {
     pub rc: i32,
@@ -157,6 +157,7 @@ pub struct Output {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 

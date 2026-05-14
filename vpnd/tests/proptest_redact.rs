@@ -4,6 +4,7 @@
 //!   1. Any line containing /tmp/vpn-<env>.secrets.yaml is replaced by the
 //!      redaction marker, regardless of surrounding text.
 //!   2. Multi-line strings with no secrets path are passed through unchanged.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use proptest::prelude::*;
 use vpnd::commands::doctor::redact_secrets;

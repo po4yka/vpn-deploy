@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::cli::Cli;
 
 /// Resolved paths and flags for a single `vpnd` invocation.
-#[allow(dead_code)] // some fields used by commands not yet wired (e.g. ansible_dir for direct playbook calls)
+#[allow(dead_code)] // several fields (ansible_dir, tf_root, json) are reserved for subcommands not yet wired; removing them would break the Context contract
 #[derive(Debug, Clone)]
 pub struct Context {
     pub root: PathBuf,

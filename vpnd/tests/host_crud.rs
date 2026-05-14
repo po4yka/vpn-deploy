@@ -1,5 +1,6 @@
 //! Integration tests for the host registry CRUD cycle via direct Registry API.
 //! Mirrors what commands::host::run() does but avoids touching the real HOME.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use tempfile::TempDir;
 use vpnd::state::{Host, Registry};

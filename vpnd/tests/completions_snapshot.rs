@@ -2,6 +2,7 @@
 //!
 //! Locks in the clap-generated completion shape so accidental CLI flag changes
 //! surface as clear PR diffs rather than silent regressions.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use clap::CommandFactory;
 use clap_complete::{generate, shells};

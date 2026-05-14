@@ -3,6 +3,7 @@
 //! The share command requires a decrypted secrets file and a make emit-singbox stub.
 //! We test the structural invariants via the recipient page and qr modules directly,
 //! and test urlencode behavior via the percent-encoding crate (mirrors share.rs impl).
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use tempfile::TempDir;

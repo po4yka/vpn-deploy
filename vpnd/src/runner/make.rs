@@ -39,6 +39,7 @@ pub fn target_with(ctx: &Context, name: &str, kvs: &[(&str, &str)]) -> Cmd {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 
