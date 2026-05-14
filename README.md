@@ -56,6 +56,10 @@ role only. Multi-VPS layouts: `docs/RUNBOOK-add-fallback.md`.
 
 ## Where to start
 
+Agents and contributors: `AGENTS.md` and `CLAUDE.md` at the repo root carry
+the working rules (per-folder variants apply when working inside a subtree).
+Then:
+
 1. `docs/QUICKSTART.md` — zero-to-working in ~30 minutes.
 2. `docs/ARCHITECTURE.md` — how this repo maps to the P0–P3 stack.
 3. `docs/CDN-DECISION.md` — explicit ADR: Cloudflare CDN is **not** the RU

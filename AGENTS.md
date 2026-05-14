@@ -1,0 +1,145 @@
+# vpn-deploy — agent instructions
+
+> Cross-tool counterpart to `CLAUDE.md`. Per-folder `AGENTS.md` are symlinks
+> to the directory's `CLAUDE.md` — edit `CLAUDE.md`, not the symlink. This
+> file is opinionated and explicit; treat it as the single entry point for
+> agents that do not load `CLAUDE.md` natively (Codex, Cursor, Aider, …).
+
+## Project at a glance
+
+Reproducible IaC for a four-tier multi-profile VPN stack:
+
+- **P0** — VLESS + REALITY + Vision (TCP/443, RU baseline)
+- **P1** — nginx + XHTTP direct (configurable port; no CDN baseline)
+- **P2** — Hysteria2 (UDP) + AmneziaWG (device VPN)
+- **P3** — manual reachability fallbacks
+
+Layers: Terraform → cloud-init → Ansible → SOPS+age secrets → optional `vpnd`
+Rust CLI. Threat model: RU-internet / TSPU-aware. **Nodes are disposable**:
+when an IP burns, recreate from git + secrets, do not repair.
+
+## Build & test
+
+The Makefile is the canonical operator surface.
+
+| Goal | Command |
+|---|---|
+| Fast CI gate (render, secrets, snapshots, schema, syntax, pytest) | `make ci-fast` |
+| Single Ansible role | `make molecule-test ROLE=<name>` |
+| Terraform mock_provider tests | `make tf-test` |
+| Rust convenience CLI | `cd vpnd && cargo check && cargo test` |
+| Validate before commit (fmt, validate, gitleaks, ansible-lint) | `make validate` |
+| Dry-run deploy (no changes) | `make dry-run` |
+| Full deploy | `make deploy` |
+| Post-deploy verification | `make verify` |
+
+## Hard rules — DO NOT
+
+- Commit secrets, Terraform state, decrypted secrets, `user_data` contents,
+  Ansible debug, or screenshots containing tokens. Provider credentials live
+  in env vars only.
+- Bypass safety gates: `--no-verify`, `--no-gpg-sign`, `gitleaks` skip,
+  pre-commit skip, ansible-lint skip — never, unless the user has explicitly
+  asked.
+- Share UUIDs, REALITY shortIds, or AmneziaWG peer keys across devices. One
+  per device, always.
+- Mention Claude, Claude Code, or Anthropic in commit messages. Do not add
+  `Co-Authored-By:` trailers.
+- Pipe remote installers into root shells.
+- Run public admin panels.
+- Cross layer boundaries except through documented interfaces. Terraform owns
+  cloud resources; cloud-init owns first-boot; Ansible owns runtime state;
+  SOPS+age owns secrets at rest; `vpnd` is convenience only.
+- Use CDN as the RU baseline. See `docs/CDN-DECISION.md`.
+- Commit pre-release versions to production toggles. Pre-releases go through
+  staging only.
+
+## Conventions — DO
+
+- **Conventional Commits**. release-please drives versioning and the
+  changelog; do not edit `CHANGELOG.md` by hand. One bump per session by
+  intent.
+- **Edit the per-folder `CLAUDE.md`** when local design context changes. The
+  format is fixed: three sections — **Design decisions** (WHY), **What's done
+  well** (preserve), **Pitfalls** (the most valuable). Keep each under ~40
+  lines.
+- **Prefer small, focused diffs** (<200 lines when possible). Bug fix ≠
+  surrounding cleanup.
+- **Run `make validate` before committing** Terraform or Ansible changes.
+- **Verify before claiming completion**. If a hook fails, fix the cause —
+  do not skip the hook.
+
+## Per-folder agent docs
+
+Walk the directory tree — every meaningful folder has its own `AGENTS.md`
+(symlinked to `CLAUDE.md` with the three-section format above):
+
+```
+AGENTS.md / CLAUDE.md                                — this file (root)
+ansible/                                             — playbook order, group_vars contract
+ansible/roles/{amneziawg,backup,baseline,cdn-front,
+              firewall,geodata,honeypot,hysteria,
+              monitoring,naive,nginx-xhttp,
+              probe-ratelimit,subscription-host,
+              warp-outbound,watchdog,xray}/          — 16 roles
+terraform/                                           — provider-root strategy
+terraform/providers/{hetzner,upcloud,vultr}/         — per-provider quirks
+terraform/shared/                                    — cloud-init contract
+scripts/                                             — shell/python conventions
+tests/                                               — unit, snapshot, molecule, tf-test layers
+vpnd/                                                — Rust convenience CLI
+```
+
+When working inside a subtree, the nearest `AGENTS.md` wins.
+
+## Source of truth
+
+| Artifact | Canonical location |
+|---|---|
+| CLI flags / subcommands | `vpnd/src/cli.rs` |
+| Package versions | release-please + `CHANGELOG.md` |
+| Secrets schema | `scripts/check-secrets-coverage.py` + `scripts/validate-secrets.py` |
+| Protocol toggles | `ansible/group_vars/all.yml` + cohort files (`vpn-p0.yml`, `vpn-p1p2.yml`, `vpn-fullstack.yml`) |
+| Recipient page | `vpnd/templates/recipient.html` |
+| AWG cohort profiles | `ansible/roles/amneziawg/vars/cohorts/` |
+| Xray version pin | `ansible/roles/xray/defaults/main.yml` |
+
+## Change recipes
+
+### New Ansible role
+
+1. Scaffold `ansible/roles/<name>/` (tasks, defaults, meta, handlers as needed).
+2. Add enable toggle to `ansible/group_vars/all.yml`.
+3. Add secrets keys to `secrets/prod.secrets.example.yaml` if the role needs secrets.
+4. Write a molecule scenario under `ansible/roles/<name>/molecule/` or add a justified skip to `docs/TESTING.md`.
+5. Create `ansible/roles/<name>/CLAUDE.md` (three-section format).
+6. Update `README.md` if operator-facing behaviour changed.
+7. Include the role in `ansible/playbooks/site.yml` behind the toggle.
+
+### New Terraform provider
+
+1. Create `terraform/providers/<name>/` with identical output schema to existing providers (`server_ipv4`, `server_ipv6`, `admin_user`, `server_hostname`).
+2. Add a branch to `scripts/render-inventory.sh` for the new provider's output keys.
+3. Add a row to `docs/PROVIDER-NOTES.md` (status, version, known limits).
+4. Create `terraform/providers/<name>/CLAUDE.md`.
+
+### New vpnd subcommand
+
+1. Add a variant to the `Command` enum in `vpnd/src/cli.rs`.
+2. Create `vpnd/src/commands/<name>.rs` with signature `pub async fn run(ctx: &Context, args: …Args) -> Result<()>`.
+3. Wire the module in `vpnd/src/commands/mod.rs`.
+4. Add a match arm in `vpnd/src/main.rs`.
+5. Add a snapshot test if the subcommand renders output.
+6. Update `vpnd/CLAUDE.md` if the subcommand introduces an architecturally novel pattern.
+
+### New AmneziaWG cohort
+
+1. Create `ansible/roles/amneziawg/vars/cohorts/<carrier>.yml` with the obfuscation parameters.
+2. Add a row to `docs/AWG-COHORTS.md` (carrier, junk packet sizes, init/response packet sizes, obfuscation key).
+3. Add a `group_vars` hint or comment if the cohort requires non-default operator awareness at deploy time.
+
+## When the user says "remember"
+
+Save to the relevant folder's `CLAUDE.md` (the `AGENTS.md` symlink points at
+it), not to an external memory system. The per-folder knowledge layer is the
+durable artifact.

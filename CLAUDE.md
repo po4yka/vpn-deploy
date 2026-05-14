@@ -39,6 +39,11 @@ self-healing knowledge layer. Format: three sections — **Design decisions**
 (WHY), **What's done well** (preserve), **Pitfalls** (the most valuable).
 Keep each under ~40 lines. Update as part of the PR, not a separate task.
 
+Cross-tool agents (Codex, Cursor, Aider, …) load `AGENTS.md`. There is a
+real `/AGENTS.md` at the repo root (a distilled, opinionated subset of this
+file); every folder with a `CLAUDE.md` also has an `AGENTS.md` symlink
+pointing at it. Edit `CLAUDE.md` — never edit the symlink.
+
 Current coverage:
 
 ```
