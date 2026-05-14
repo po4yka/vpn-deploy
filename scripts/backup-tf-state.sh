@@ -54,6 +54,8 @@ chmod 0600 "$OUT"
 echo "wrote $OUT"
 
 # Retain last 30 backups per (provider, env) tuple.
+# SC2012: `ls -1t` is needed for mtime-ordered listing portable across
+# Linux and macOS without GNU coreutils; `find -printf` is GNU-only.
 # shellcheck disable=SC2012
 ls -1t "${BACKUP_DEST}/${PROVIDER}-${ENV}-"*.tfstate.age 2>/dev/null \
   | tail -n +31 \

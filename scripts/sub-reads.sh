@@ -44,36 +44,12 @@ if ! [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 2
 fi
 
-filter='cat'
-if [[ -n "$SINCE" ]]; then
-  filter+=" | python3 -c \"
-import sys, json, datetime as dt
-cutoff = dt.datetime.fromisoformat('${SINCE}').replace(tzinfo=dt.timezone.utc)
-for line in sys.stdin:
-    line = line.strip()
-    if not line: continue
-    try:
-        rec = json.loads(line)
-    except ValueError:
-        continue
-    ts = dt.datetime.fromtimestamp(rec.get('ts',0), tz=dt.timezone.utc)
-    if ts >= cutoff:
-        print(line)\""
-fi
-if [[ -n "$ROUTE" ]]; then
-  filter+=" | python3 -c \"
-import sys, json
-for line in sys.stdin:
-    line = line.strip()
-    try: rec = json.loads(line)
-    except ValueError: continue
-    if rec.get('route') == '${ROUTE}':
-        print(line)\""
-fi
-if [[ -n "$LIMIT" ]]; then
-  filter+=" | tail -n ${LIMIT}"
-fi
+filter_args=()
+[[ -n "$SINCE" ]] && filter_args+=(--since "$SINCE")
+[[ -n "$ROUTE" ]] && filter_args+=(--route "$ROUTE")
+[[ -n "$LIMIT" ]] && filter_args+=(--limit "$LIMIT")
 
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
 ssh "${ssh_opts[@]}" "${admin}@${ip}" \
-  "sudo cat /var/log/vpn-subscription/reads.log" | eval "$filter"
+  "sudo cat /var/log/vpn-subscription/reads.log" \
+  | python3 "${REPO_ROOT}/scripts/sub-reads-filter.py" "${filter_args[@]}"
