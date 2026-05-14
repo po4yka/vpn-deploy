@@ -71,7 +71,9 @@ Thumbs.db
 .pytest_cache/
 
 # Claude Code / oh-my-claudecode local state
-.claude/
+# Track project-scoped skills only; ignore runtime state under .claude/.
+/.claude/*
+!/.claude/skills/
 .omc/
 
 # SBOM artifacts (reproducible from secrets schema via make emit-sbom)
