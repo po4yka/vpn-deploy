@@ -8,6 +8,8 @@ server {
 
     server_name {{ nginx_xhttp.server_name }};
 
+    server_tokens off;
+
     ssl_certificate     /etc/nginx/tls/{{ nginx_xhttp.server_name }}.fullchain.pem;
     ssl_certificate_key /etc/nginx/tls/{{ nginx_xhttp.server_name }}.key;
 
@@ -56,5 +58,6 @@ server {
     listen 80;
     listen [::]:80;
     server_name {{ nginx_xhttp.server_name }};
+    server_tokens off;
     return 301 https://$host{% if nginx_redirect_port != 443 %}:{{ nginx_redirect_port }}{% endif %}$request_uri;
 }

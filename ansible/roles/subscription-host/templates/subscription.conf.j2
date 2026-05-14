@@ -7,6 +7,8 @@ server {
 
     server_name {{ subscription.server_name | default(nginx_xhttp.server_name) }};
 
+    server_tokens off;
+
     ssl_certificate     /etc/nginx/tls/{{ subscription.server_name | default(nginx_xhttp.server_name) }}.fullchain.pem;
     ssl_certificate_key /etc/nginx/tls/{{ subscription.server_name | default(nginx_xhttp.server_name) }}.key;
 
