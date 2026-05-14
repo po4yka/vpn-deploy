@@ -222,4 +222,4 @@ make blue-green GREEN_ENV=<name>          # orchestrate blue-green replacement
 
 ## License
 
-Public domain (see `LICENSE`).
+BSD 3-Clause (see `LICENSE`).
