@@ -91,6 +91,10 @@ jobs:
     name: attach release assets
     needs: attest
     runs-on: ubuntu-24.04
+    # contents: write is required for softprops/action-gh-release to publish the
+    # GitHub release and upload assets. Scoped to this job only; the top-level
+    # token is read-only and the action is on Scorecard's recognized-release-
+    # action allowlist (Token-Permissions check does not penalize this).
     permissions:
       contents: write
 
