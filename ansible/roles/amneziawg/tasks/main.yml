@@ -37,6 +37,25 @@
     version: "{{ amneziawg_go_version }}"
     update: false
 
+- name: Resolve the amneziawg-go checked-out commit
+  ansible.builtin.command:
+    cmd: git rev-parse HEAD
+    chdir: /opt/src/amneziawg-go
+  register: _awg_go_head
+  changed_when: false
+  when: amneziawg_go_commit | length > 0
+
+- name: Verify amneziawg-go resolved to the pinned commit
+  ansible.builtin.assert:
+    that:
+      - _awg_go_head.stdout | trim == amneziawg_go_commit
+    fail_msg: >-
+      amneziawg-go is at {{ _awg_go_head.stdout | trim }} but
+      amneziawg_go_commit pins {{ amneziawg_go_commit }}. Tag
+      {{ amneziawg_go_version }} appears to have moved upstream — refusing
+      to build unverified source.
+  when: amneziawg_go_commit | length > 0
+
 - name: Build amneziawg-go
   ansible.builtin.command:
     cmd: make
@@ -58,6 +77,25 @@
     dest: /opt/src/amneziawg-tools
     version: "{{ amneziawg_tools_version }}"
     update: false
+
+- name: Resolve the amneziawg-tools checked-out commit
+  ansible.builtin.command:
+    cmd: git rev-parse HEAD
+    chdir: /opt/src/amneziawg-tools
+  register: _awg_tools_head
+  changed_when: false
+  when: amneziawg_tools_commit | length > 0
+
+- name: Verify amneziawg-tools resolved to the pinned commit
+  ansible.builtin.assert:
+    that:
+      - _awg_tools_head.stdout | trim == amneziawg_tools_commit
+    fail_msg: >-
+      amneziawg-tools is at {{ _awg_tools_head.stdout | trim }} but
+      amneziawg_tools_commit pins {{ amneziawg_tools_commit }}. Tag
+      {{ amneziawg_tools_version }} appears to have moved upstream — refusing
+      to build unverified source.
+  when: amneziawg_tools_commit | length > 0
 
 - name: Build amneziawg-tools
   ansible.builtin.command:
