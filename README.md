@@ -33,6 +33,23 @@ disposable: when an IP burns, recreate from git + secrets, do not repair.
 
 Switch via `make PROVIDER=upcloud …`.
 
+## Deploy profiles
+
+The full stack (P0+P1+P2) is the default, but partial deploys are first-class.
+Each cohort is a group_vars file applied via an inventory group:
+
+| Cohort | File | Profiles enabled |
+|---|---|---|
+| `vpn-p0` | `ansible/group_vars/vpn-p0.yml` | P0 (VLESS+REALITY+Vision) only |
+| `vpn-p1p2` | `ansible/group_vars/vpn-p1p2.yml` | P1 (nginx+XHTTP) + P2 (Hysteria2 + AmneziaWG); REALITY off, nginx may take 443 |
+| `vpn-fullstack` | `ansible/group_vars/vpn-fullstack.yml` | All of the above on one node (matches `all.yml` defaults explicitly) |
+
+Assign hosts to a cohort by passing `COHORTS=` to `render-inventory.sh`
+(e.g. `HOSTS="upcloud:p0" COHORTS="p0" ./scripts/render-inventory.sh`).
+For a one-off run without changing inventory, use tags:
+`ansible-playbook site.yml --tags p0` skips P1/P2 transport roles. See
+`docs/RUNBOOK-add-fallback.md` for multi-VPS cohort layouts.
+
 ## Where to start
 
 1. `docs/QUICKSTART.md` — zero-to-working in ~30 minutes.
