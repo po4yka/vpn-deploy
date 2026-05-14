@@ -23,7 +23,8 @@ export ANSIBLE_CONFIG := $(ANSIBLE_DIR)/ansible.cfg
         setup-yubikey check-killswitch install-operator-crons \
         remove-operator-crons issue-sub-token sub-reads \
         test-unit snapshot-check snapshot-update validate-secrets \
-        tf-test ci-fast bats-test vpnd-test vpnd-clippy vpnd-mutants tf-policy
+        tf-test ci-fast bats-test vpnd-test vpnd-clippy vpnd-mutants tf-policy \
+        check
 
 help:
 	@echo "vpn-deploy Makefile"
@@ -259,6 +260,11 @@ ci-fast:
 	@echo "== unit tests =="; python3 -m pytest tests/unit/ -q
 	@echo "== bats shell tests =="; bats tests/bats/
 	@echo "ci-fast: OK"
+
+# Union gate: everything in validate + everything in ci-fast.
+# Run this before any commit touching Ansible, Terraform, or Python to get
+# the same signal that CI produces without waiting for a remote run.
+check: validate ci-fast  ## Full local gate: validate + ci-fast (superset of both)
 
 molecule-test:
 	@test -n "$(ROLE)" || { echo "ROLE=<role-name> required (e.g. baseline, firewall, xray)"; exit 1; }
