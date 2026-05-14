@@ -12,5 +12,22 @@ ExecStart=/usr/bin/awg-quick up %i
 ExecStop=/usr/bin/awg-quick down %i
 ExecReload=/bin/bash -c '/usr/bin/awg syncconf %i <(/usr/bin/awg-quick strip %i)'
 
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+ReadWritePaths=/run
+
 [Install]
 WantedBy=multi-user.target
