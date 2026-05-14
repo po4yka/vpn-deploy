@@ -3,27 +3,29 @@
 # Run `mise install` once after cloning to provision the exact versions that
 # CI uses. Update versions here whenever CI pins change; keep them in sync.
 #
+# Scope: language runtimes and standalone binaries only. Python packages
+# (ansible-core, ansible-lint, yamllint, etc.) are NOT mise tools — they are
+# pinned in requirements.txt and installed with
+#   pip install -r requirements.txt
+# into the mise-managed python below, so requirements.txt stays the single
+# source of truth for the Python toolchain.
+#
 # Reference workflows: .github/workflows/ci.yml, _rust.yml
-# Reference files:     requirements.txt (ansible/ansible-lint),
-#                      vpnd/Cargo.toml (rust-version),
+# Reference files:     vpnd/Cargo.toml (rust-version),
 #                      .pre-commit-config.yaml (gitleaks rev)
 
 [tools]
 # hashicorp/setup-terraform@v4 with terraform_version: "1.15.2" in ci.yml
 terraform = "1.15.2"
 
-# actions/setup-python with python-version: "3.12" in ci.yml
+# actions/setup-python with python-version: "3.12" in ci.yml.
+# After `mise install`, run `pip install -r requirements.txt` to get the
+# pinned ansible-core / ansible-lint / yamllint into this interpreter.
 python = "3.12"
 
 # dtolnay/rust-toolchain stable; rust-version = "1.75" in vpnd/Cargo.toml
 # CI uses `toolchain: stable` (floating); 1.75 is the declared MSRV floor.
 rust = "1.75"  # CI uses stable — upgrade when Cargo.toml rust-version bumps
-
-# ansible-core==2.20.5 pinned in requirements.txt
-ansible-core = "2.20.5"
-
-# ansible-lint==26.4.0 pinned in requirements.txt (also matches pre-commit rev)
-ansible-lint = "26.4.0"
 
 # gitleaks rev: v8.30.1 in .pre-commit-config.yaml
 gitleaks = "8.30.1"
