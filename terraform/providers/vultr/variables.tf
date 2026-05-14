@@ -12,21 +12,39 @@ variable "server_name" {
 variable "region" {
   type        = string
   description = "Vultr region, e.g. ams, fra, lhr, ewr."
+
+  validation {
+    condition     = contains(["ams", "fra", "lhr"], var.region)
+    error_message = "region must be one of the approved low-latency RU-path locations: ams, fra, lhr."
+  }
 }
 
 variable "plan" {
   type        = string
-  description = "Vultr plan slug, e.g. vc2-1c-2gb."
+  description = "Vultr plan slug, e.g. vc2-1c-1gb or vhf-1c-1gb."
+
+  validation {
+    condition     = contains(["vc2-1c-1gb", "vhf-1c-1gb"], var.plan)
+    error_message = "plan must be one of: vc2-1c-1gb, vhf-1c-1gb."
+  }
 }
 
 variable "os_id" {
   type        = number
   description = "Vultr OS id, e.g. Debian or Ubuntu image id from `vultr-cli os list`."
+
+  validation {
+    # Known Vultr OS IDs for approved base images (Debian 12, Debian 11, Ubuntu 24.04, Ubuntu 22.04).
+    # Run `vultr-cli os list` to obtain IDs for new releases; add here and update error_message.
+    condition     = contains([1743, 2136, 2284, 1869], var.os_id)
+    error_message = "os_id must be an approved Vultr OS ID: 1743 (Debian 11), 2136 (Debian 12), 2284 (Debian 13), 1869 (Ubuntu 24.04)."
+  }
 }
 
 variable "admin_user" {
-  type    = string
-  default = "deploy"
+  type        = string
+  default     = "deploy"
+  description = "Non-root user created by cloud-init for SSH and Ansible access."
 }
 
 variable "admin_ssh_public_key" {
@@ -62,8 +80,9 @@ variable "build_env" {
 }
 
 variable "labels" {
-  type    = map(string)
-  default = {}
+  type        = map(string)
+  default     = {}
+  description = "Provider-specific resource tags/labels."
 }
 
 variable "enable_ipv6" {

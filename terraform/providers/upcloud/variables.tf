@@ -6,11 +6,21 @@ variable "server_name" {
 variable "zone" {
   type        = string
   description = "UpCloud zone, e.g. fi-hel1, de-fra1, us-nyc1."
+
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]{3}[0-9]$", var.zone))
+    error_message = "zone must match the UpCloud zone format, e.g. fi-hel1, de-fra1, nl-ams1."
+  }
 }
 
 variable "plan" {
   type        = string
   description = "UpCloud plan slug, e.g. 1xCPU-2GB or DEV-2xCPU-4GB."
+
+  validation {
+    condition     = contains(["1xCPU-1GB", "1xCPU-2GB", "2xCPU-4GB", "DEV-2xCPU-4GB"], var.plan)
+    error_message = "plan must be one of: 1xCPU-1GB, 1xCPU-2GB, 2xCPU-4GB, DEV-2xCPU-4GB."
+  }
 }
 
 variable "storage_template" {
@@ -33,8 +43,9 @@ variable "storage_size_gb" {
 }
 
 variable "admin_user" {
-  type    = string
-  default = "deploy"
+  type        = string
+  default     = "deploy"
+  description = "Non-root user created by cloud-init for SSH and Ansible access."
 }
 
 variable "admin_ssh_public_key" {
@@ -70,8 +81,9 @@ variable "build_env" {
 }
 
 variable "labels" {
-  type    = map(string)
-  default = {}
+  type        = map(string)
+  default     = {}
+  description = "Provider-specific resource tags/labels."
 }
 
 variable "additional_public_ip" {

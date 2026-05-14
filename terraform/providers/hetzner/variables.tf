@@ -6,11 +6,21 @@ variable "server_name" {
 variable "location" {
   type        = string
   description = "Hetzner Cloud location, e.g. hel1, nbg1, fsn1."
+
+  validation {
+    condition     = contains(["nbg1", "fsn1", "hel1", "ash", "hil", "sin"], var.location)
+    error_message = "location must be one of: nbg1, fsn1, hel1, ash, hil, sin."
+  }
 }
 
 variable "server_type" {
   type        = string
-  description = "Hetzner server type, e.g. cpx11, cpx21, cx22."
+  description = "Hetzner server type, e.g. cpx21, cpx31, cx22, cx32."
+
+  validation {
+    condition     = contains(["cx22", "cx32", "cpx21", "cpx31"], var.server_type)
+    error_message = "server_type must be one of: cx22, cx32, cpx21, cpx31."
+  }
 }
 
 variable "image" {
@@ -19,8 +29,9 @@ variable "image" {
 }
 
 variable "admin_user" {
-  type    = string
-  default = "deploy"
+  type        = string
+  default     = "deploy"
+  description = "Non-root user created by cloud-init for SSH and Ansible access."
 }
 
 variable "admin_ssh_public_key" {
@@ -56,8 +67,9 @@ variable "build_env" {
 }
 
 variable "labels" {
-  type    = map(string)
-  default = {}
+  type        = map(string)
+  default     = {}
+  description = "Provider-specific resource tags/labels."
 }
 
 variable "enable_ipv6" {

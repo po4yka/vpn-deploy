@@ -6,7 +6,7 @@ variables {
   vultr_api_key        = "test-vultr-api-key"
   server_name          = "vpn-test"
   region               = "ams"
-  plan                 = "vc2-1c-2gb"
+  plan                 = "vc2-1c-1gb"
   os_id                = 2136
   admin_ssh_public_key = "ssh-ed25519 AAAATESTKEY test@harness"
   allowed_ssh_cidrs    = ["203.0.113.42/32"]
