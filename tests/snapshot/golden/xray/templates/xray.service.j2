@@ -19,7 +19,15 @@ LimitNOFILE=1048576
 
 PrivateTmp=true
 ProtectHome=true
-ProtectSystem=full
+ProtectSystem=strict
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
 ReadWritePaths={{ xray_log_dir | default('/var/log/xray') }} /var/lib/xray {{ xray_config_dir | default('/etc/xray') }}
 
 [Install]

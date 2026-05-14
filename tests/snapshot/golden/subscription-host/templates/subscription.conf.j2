@@ -7,6 +7,8 @@ server {
 
     server_name vpn.example.com;
 
+    server_tokens off;
+
     ssl_certificate     /etc/nginx/tls/vpn.example.com.fullchain.pem;
     ssl_certificate_key /etc/nginx/tls/vpn.example.com.key;
 

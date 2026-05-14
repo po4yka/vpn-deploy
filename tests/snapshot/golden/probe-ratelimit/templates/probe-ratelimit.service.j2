@@ -15,6 +15,10 @@ Restart=on-failure
 RestartSec=5s
 
 # Hardening — root for nft but everything else locked down.
+CapabilityBoundingSet=CAP_NET_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=yes
+PrivateTmp=yes
 ProtectHome=true
 ProtectSystem=strict
 ReadWritePaths=/var/lib/node_exporter/textfile
@@ -24,6 +28,8 @@ ProtectKernelModules=true
 ProtectKernelTunables=true
 RestrictNamespaces=true
 LockPersonality=true
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
