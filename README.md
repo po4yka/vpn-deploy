@@ -31,6 +31,51 @@ flowchart LR
 Every layer is dry-runnable. Every layer has a rollback path. Nodes are
 disposable: when an IP burns, recreate from git + secrets, do not repair.
 
+## Stack
+
+P0 is the RU baseline. P1 and P2 run alongside it as alternate transports;
+clients carry selector + urltest logic so they automatically fail over to
+whichever profile is still reachable. P3 is the operator-level recovery —
+a burned IP is replaced, not repaired.
+
+```mermaid
+flowchart LR
+    subgraph CL[client]
+        direction TB
+        SB["sing-box / NekoBox<br/>selector + urltest"]
+        AC["AmneziaWG client"]
+    end
+    subgraph TSPU["RU internet · TSPU"]
+        DPI["DPI · SNI inspection · active probing"]
+    end
+    subgraph VPS["disposable VPS · nftables · geoblock"]
+        direction TB
+        P0X["<b>P0</b> · xray REALITY + Vision / mux<br/>TCP/443 · RU baseline"]
+        P1X["<b>P1</b> · nginx XHTTP direct<br/>TCP/8443 or 443"]
+        P2H["<b>P2</b> · Hysteria2<br/>UDP/443 · port-hop opt"]
+        P2A["<b>P2</b> · AmneziaWG<br/>UDP/cohort · obfuscated"]
+    end
+    subgraph UP[upstream]
+        WI["internet<br/>geosite-routed egress"]
+    end
+
+    SB -- VLESS --> DPI
+    SB -- XHTTP --> DPI
+    SB -- QUIC --> DPI
+    AC -- WG --> DPI
+    DPI --> P0X
+    DPI --> P1X
+    DPI --> P2H
+    DPI --> P2A
+    P0X --> WI
+    P1X --> WI
+    P2H --> WI
+    P2A --> WI
+
+    P3(("<b>P3</b><br/>manual fallback:<br/>alt IPs · alt ports<br/>WARP outbound<br/>recreate on burn"))
+    P3 -. recovery .-> VPS
+```
+
 ## Provider support
 
 | Provider | Status |
