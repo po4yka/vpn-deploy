@@ -32,6 +32,14 @@ on:
         default: "fi-hel1"
   pull_request:
     types: [labeled]
+  # Weekly scheduled rebuild — catches Terraform/cloud-init/Ansible/SOPS
+  # interface breaks before a real incident does. Harmless on an
+  # unconfigured repo: every job step is gated on the template-UUID
+  # short-circuit, so a fork or a repo without CI_* secrets simply
+  # no-ops. To disable, delete this `schedule:` block — the manual
+  # (workflow_dispatch) and PR-label triggers are unaffected.
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
 
 permissions:
   contents: read
@@ -41,6 +49,7 @@ jobs:
     # Manually-triggered, or PR labeled `ci-real-deploy`.
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci-real-deploy'))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
