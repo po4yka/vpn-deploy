@@ -23,3 +23,9 @@ fs.file-max = 1048576
 # IPv6: keep RA off by default; if the host has only IPv4, no harm done
 net.ipv6.conf.default.accept_ra = 0
 net.ipv6.conf.all.accept_ra = 0
+
+# Kernel hardening
+kernel.randomize_va_space = 2
+kernel.kptr_restrict = 2
+kernel.yama.ptrace_scope = 2
+kernel.unprivileged_userns_clone = 0
