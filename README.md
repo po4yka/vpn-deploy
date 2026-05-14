@@ -13,11 +13,19 @@ secrets live outside the repo (SOPS + age).
 
 ## Layers
 
-```
-Terraform     → VPS, firewall, SSH key, optional DNS/floating IP
-cloud-init    → admin user, SSH hardening, python3, marker file
-Ansible       → packages, nftables, xray, nginx, hysteria, AWG, monitoring, backup
-Secrets       → SOPS-encrypted file outside the repo (~/.config/vpn-provision/)
+```mermaid
+flowchart LR
+    TF["Terraform<br/><sub>VPS · firewall · SSH key · DNS</sub>"]
+    CI["cloud-init<br/><sub>admin user · SSH hardening · python3</sub>"]
+    AN["Ansible<br/><sub>nftables · xray · nginx · hysteria · AWG · monitoring · backup</sub>"]
+    SC[("SOPS + age<br/><sub>secrets at rest, outside the repo</sub>")]
+    VD["vpnd CLI<br/><sub>Rust convenience over Make / TF / Ansible / SOPS</sub>"]
+
+    TF --> CI --> AN
+    SC -. VPN_SECRETS_FILE .-> AN
+    VD -. wraps .-> TF
+    VD -. wraps .-> AN
+    VD -. wraps .-> SC
 ```
 
 Every layer is dry-runnable. Every layer has a rollback path. Nodes are
@@ -43,6 +51,32 @@ Default is P0+P1+P2 on one node. Partial deploys come from cohort
   to take 443.
 - `vpn-fullstack.yml` — same as `all.yml` defaults, made explicit so a
   host in `[vpn-fullstack]` is unambiguous.
+
+```mermaid
+flowchart LR
+    subgraph CH[cohort]
+        direction TB
+        P0[vpn-p0]
+        PM[vpn-p1p2]
+        FS[vpn-fullstack]
+    end
+    subgraph TR[transports on the VPS]
+        direction TB
+        XR["xray REALITY<br/><sub>P0 · TCP/443</sub>"]
+        NG["nginx XHTTP<br/><sub>P1 · TCP/8443 or 443</sub>"]
+        HY["Hysteria2<br/><sub>P2 · UDP/443</sub>"]
+        AW["AmneziaWG<br/><sub>P2 · UDP/cohort</sub>"]
+    end
+
+    P0 --> XR
+    PM --> NG
+    PM --> HY
+    PM --> AW
+    FS --> XR
+    FS --> NG
+    FS --> HY
+    FS --> AW
+```
 
 Assign a host to a cohort with `COHORTS=` on `render-inventory.sh`:
 
