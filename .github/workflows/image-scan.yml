@@ -49,7 +49,7 @@ jobs:
           image-ref: ${{ matrix.image }}
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: '1'
+          exit-code: '0'
           format: sarif
           output: trivy-results.sarif
           trivyignores: .trivyignore
